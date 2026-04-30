@@ -47,8 +47,23 @@ android {
         )
         buildConfigField(
             "String",
-            "AGORA_BACKEND_BASE_URL",
-            quote(localOrEnv("AGORA_BACKEND_BASE_URL", "http://10.0.2.2:3000"))
+            "AGORA_APP_CERTIFICATE",
+            quote(localOrEnv("AGORA_APP_CERTIFICATE"))
+        )
+        buildConfigField(
+            "String",
+            "AGORA_CONVOAI_BASE_URL",
+            quote(
+                localOrEnv(
+                    "AGORA_CONVOAI_BASE_URL",
+                    default = "https://api.agora.io/api/conversational-ai-agent/v2/projects"
+                )
+            )
+        )
+        buildConfigField(
+            "String",
+            "AGORA_AREA",
+            quote(localOrEnv("AGORA_AREA", default = "US"))
         )
         buildConfigField("int", "AGENT_UID", localOrEnv("AGORA_AGENT_UID", default = "123456"))
 

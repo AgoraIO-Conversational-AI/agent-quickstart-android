@@ -1,36 +1,49 @@
-# Agora Conversational AI Android Quickstart
+# Agora Conversational AI Android Quickstart (Direct REST Demo)
 
-Official Android quickstart for building a realtime voice AI experience with Agora Conversational AI Engine.
+Android quickstart for trying Agora Conversational AI directly from a Kotlin app using:
 
-This repository is intentionally self-contained:
+- Kotlin
+- Jetpack Compose
+- Coroutines
+- Agora RTC
+- Agora RTM
+- Retrofit
+- Agora Conversational AI REST API
 
-- the Android client lives in `app/`
-- the lightweight backend lives in `server/`
+This `rest-api` branch does **not** require a local server.
 
-You do not need the separate Next.js quickstart to run the mobile experience.
+## Important
+
+This branch is intentionally a **demo-only direct mode**.
+
+The app reads `AGORA_APP_CERTIFICATE` from `local.properties`, generates tokens on device, and calls Agora REST directly from Android. That is convenient for a quickstart, but it is **not production-safe** because the App Certificate is packaged into the app.
+
+Use this branch to learn the flow quickly. For production, move token generation and REST calls to your own backend.
+
+## What This Demo Does
+
+- generates RTC, RTM, and ConvoAI auth tokens locally in the app
+- calls Agora REST `join`, `interrupt`, and `leave` directly with Retrofit
+- joins the RTC channel from Android
+- logs into RTM for transcript and agent-state events
+- renders the voice session with a Compose UI
+
+No third-party LLM, STT, or TTS keys are required for the default path because this sample uses Agora-managed presets.
 
 ## Run It
 
-1. Create a project in [Agora Console](https://console.agora.io/) and copy your `App ID` and `App Certificate`.
-2. Clone this repo.
-3. Configure the bundled backend.
-4. Configure the Android app.
-5. Start the backend.
-6. Run the Android app on an emulator or device.
+1. Create or choose an Agora project with Conversational AI enabled.
+2. Get your `App ID` and `App Certificate`.
+3. Clone this repo.
+4. Put your credentials in `local.properties`.
+5. Run the app from Android Studio or Gradle.
 
 ```bash
 git clone <your-fork-or-repo-url>
 cd agent-quickstart-android
 ```
 
-Configure the backend:
-
-```bash
-cd server
-cp .env.example .env
-```
-
-Set these values in `server/.env`:
+Add these values to `local.properties` in the repo root:
 
 ```properties
 AGORA_APP_ID=your_agora_app_id
@@ -38,87 +51,66 @@ AGORA_APP_CERTIFICATE=your_agora_app_certificate
 AGORA_AGENT_UID=123456
 ```
 
-Then configure `local.properties` in the repo root:
+Optional:
 
 ```properties
-AGORA_APP_ID=your_agora_app_id
-AGORA_BACKEND_BASE_URL=http://10.0.2.2:3000
-AGORA_AGENT_UID=123456
+AGORA_CONVOAI_BASE_URL=https://api.agora.io/api/conversational-ai-agent/v2/projects
+AGORA_AREA=US
 ```
 
-Start the backend:
+Build the app:
 
 ```bash
-cd server
-npm install
-npm run dev
-```
-
-Run the Android app:
-
-```bash
-cd agent-quickstart-android
 JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew :app:assembleDebug
 ```
 
-Open the project in Android Studio or install the generated debug APK on your emulator or device.
+Then open the project in Android Studio and run it on a device or emulator.
 
 ## Requirements
 
 - Android Studio with a working Android SDK
 - Java 11 compatible runtime
-- Node.js `22+`
-- An Agora project with a valid `App ID` and `App Certificate`
+- An Agora project with:
+  - Conversational AI enabled
+  - a valid `App ID`
+  - a valid `App Certificate`
 
 ## Required Configuration
 
-Backend required variables:
+Required in `local.properties`:
 
 - `AGORA_APP_ID`
 - `AGORA_APP_CERTIFICATE`
 
-Backend optional variables:
+Optional in `local.properties`:
 
 - `AGORA_AGENT_UID`
   defaults to `123456`
-- `AGORA_SERVER_PORT`
-  defaults to `3000`
+- `AGORA_CONVOAI_BASE_URL`
+  defaults to `https://api.agora.io/api/conversational-ai-agent/v2/projects`
 - `AGORA_AREA`
   defaults to `US`
-- `AGORA_AGENT_GREETING`
-  overrides the spoken greeting
-
-Android app required values:
-
-- `AGORA_APP_ID`
-- `AGORA_BACKEND_BASE_URL`
-
-Android app optional values:
-
-- `AGORA_AGENT_UID`
-  defaults to `123456`
 
 Notes:
 
-- `AGORA_AGENT_UID` should match in both `server/.env` and `local.properties`
-- for the Android emulator, `http://10.0.2.2:3000` maps to your Mac's localhost
-- for a physical device, replace `AGORA_BACKEND_BASE_URL` with your machine's LAN IP, for example `http://192.168.1.10:3000`
-- the app also accepts the legacy `agora.app.id` key from `local.properties`, but `AGORA_APP_ID` is the recommended key
+- `AGORA_APP_ID` also supports the legacy key `agora.app.id`
+- `AGORA_AREA` maps to the ConvoAI REST `geofence.area` value
+- this branch does not need `AGORA_BACKEND_BASE_URL`
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    A["Android app"] --> B["Bundled backend /server"]
-    A --> C["Agora RTC"]
-    A --> D["Agora RTM"]
-    B --> E["Agora Conversational AI Engine"]
-    E --> C
-    E --> D
-    B --> F["Agora token services"]
+    A["Android app"] --> B["Local token generation"]
+    A --> C["Agora ConvoAI REST API"]
+    A --> D["Agora RTC"]
+    A --> E["Agora RTM"]
+    C --> F["Agent runtime"]
+    F --> D
+    F --> E
 ```
 
-The Android client uses the backend for token generation and agent lifecycle operations, then talks to Agora Cloud for realtime audio, transcript events, and agent state updates.
+The app generates user and agent tokens locally, starts the agent through Agora REST, and then uses RTC and RTM for realtime media and events.
 
 ## Session Flow
 
@@ -126,48 +118,41 @@ The Android client uses the backend for token generation and agent lifecycle ope
 sequenceDiagram
     participant U as User
     participant A as Android App
-    participant B as Bundled Backend
-    participant R as Agora RTC
+    participant R as Agora REST
+    participant C as Agora RTC
     participant M as Agora RTM
     participant G as Agora Agent
 
     U->>A: Tap "Start voice session"
-    A->>B: GET /api/generate-agora-token
-    B-->>A: RTC token + RTM token + channel + uid
-    A->>B: POST /api/invite-agent
-    B->>G: Start cloud agent session
-    B-->>A: agent_id
-    A->>R: Join channel and publish microphone
-    A->>M: Login and subscribe to transcript/state
-    G-->>A: Agent state events over RTM
-    G-->>A: Transcript events over RTM
-    U->>A: Mute or speak
-    A->>B: POST /api/interrupt-agent
+    A->>A: Generate RTC token, RTM token, agent auth token
+    A->>R: POST /v2/projects/{appid}/join
+    R->>G: Start agent
+    R-->>A: agent_id
+    A->>C: Join channel and publish mic
+    A->>M: Login and subscribe
+    G-->>A: Transcript and state events over RTM
+    U->>A: Speak / mute / interrupt
+    A->>R: POST /agents/{agentId}/interrupt
     U->>A: End session
-    A->>B: POST /api/stop-conversation
-    A->>R: Leave channel
+    A->>R: POST /agents/{agentId}/leave
+    A->>C: Leave channel
     A->>M: Logout
 ```
 
-## What You Get
+## Default Agent Setup
 
-- Android app built with Kotlin, Jetpack Compose, and coroutines
-- Material 3 pre-session and live-session UI
-- Agora RTC audio integration
-- Agora RTM transcript and agent-state integration
-- bundled Node.js backend for token generation and agent lifecycle control
-- Retrofit-based backend client
-- local transcript assembly and turn-management tests
+The app starts the agent with the preset:
 
-## How It Works
+- `deepgram_nova_3`
+- `openai_gpt_4o_mini`
+- `minimax_speech_2_6_turbo`
 
-1. The app requests an RTC + RTM token bundle from `GET /api/generate-agora-token`.
-2. The backend starts the cloud agent with `POST /api/invite-agent`.
-3. The Android client joins the RTC channel and publishes microphone audio.
-4. The app logs into RTM and receives transcript and agent-state events.
-5. User speech, barge-in handling, and session state are reflected in the Compose UI.
-6. The app can interrupt the active agent turn with `POST /api/interrupt-agent`.
-7. The session is ended with `POST /api/stop-conversation`.
+It also enables:
+
+- RTM event delivery
+- RTM data channel transcripts
+- start-of-speech interruption
+- VAD-based end-of-speech detection
 
 ## Android App Layers
 
@@ -175,51 +160,36 @@ sequenceDiagram
 flowchart TD
     UI["Compose UI<br/>MainActivity<br/>ConversationScreen"] --> VM["ConversationViewModel"]
     VM --> REPO["ConversationRepository"]
-    REPO --> API["ConversationBackendApi<br/>Retrofit"]
+    REPO --> API["ConversationAgoraApi<br/>Retrofit"]
+    API --> TOKENS["AgoraLocalTokenFactory"]
+    TOKENS --> BUILDER["Vendored Agora token builder"]
     VM --> RTC["AgoraConversationSessionManager"]
     RTC --> AUDIO["AudioSessionManager<br/>TurnManager<br/>SelfSpeechFilter"]
     RTC --> RTM["RTM transcript and state handling"]
-    API --> SERVER["Bundled Express server"]
 ```
 
 ## Repo Map
 
-### Top-Level
-
-- `app/`
-  Android client
-- `server/`
-  local Express backend for tokens and agent lifecycle
-
 ### Android Client
 
 - `app/src/main/java/com/androidengineers/agent_quickstart_android/MainActivity.kt`
-  entry point, permission handling, Compose host
+  app entry point and permission handling
 - `app/src/main/java/com/androidengineers/agent_quickstart_android/ui/ConversationScreen.kt`
-  pre-session and connected session UI
+  Compose UI for pre-session and connected session
 - `app/src/main/java/com/androidengineers/agent_quickstart_android/ui/ConversationViewModel.kt`
   screen state orchestration
-- `app/src/main/java/com/androidengineers/agent_quickstart_android/data/ConversationRepository.kt`
-  backend use-cases
-- `app/src/main/java/com/androidengineers/agent_quickstart_android/data/ConversationBackendApi.kt`
-  Retrofit backend client
 - `app/src/main/java/com/androidengineers/agent_quickstart_android/rtc/AgoraConversationSessionManager.kt`
-  RTC/RTM session lifecycle, transcript and state handling
-- `app/src/main/java/com/androidengineers/agent_quickstart_android/rtc/TranscriptAssembler.kt`
-  transcript message assembly
-- `app/src/main/java/com/androidengineers/agent_quickstart_android/audio/`
-  turn state, self-speech filtering, playback, and audio-session helpers
+  RTC and RTM lifecycle plus transcript/state handling
+- `app/src/main/java/com/androidengineers/agent_quickstart_android/data/ConversationRepository.kt`
+  app-facing session use cases
+- `app/src/main/java/com/androidengineers/agent_quickstart_android/data/ConversationAgoraApi.kt`
+  direct Agora REST client using Retrofit
+- `app/src/main/java/com/androidengineers/agent_quickstart_android/data/AgoraLocalTokenFactory.kt`
+  on-device token generation for this demo branch
 - `app/src/main/java/com/androidengineers/agent_quickstart_android/config/QuickstartConfig.kt`
-  BuildConfig-backed local configuration
-
-### Backend
-
-- `server/src/index.mjs`
-  Express server, Agora token generation, agent start, interrupt, and stop routes
-- `server/.env.example`
-  backend environment template
-- `server/package.json`
-  backend scripts and dependencies
+  `BuildConfig` and local configuration access
+- `app/src/main/java/io/agora/media/`
+  vendored official Agora Java token-builder source adapted for Android
 
 ### Tests
 
@@ -227,64 +197,21 @@ flowchart TD
 - `app/src/test/java/com/androidengineers/agent_quickstart_android/audio/TurnManagerTest.kt`
 - `app/src/test/java/com/androidengineers/agent_quickstart_android/audio/SelfSpeechFilterTest.kt`
 
-## Backend API Contract
+## Direct REST Contract Used by the App
 
-The bundled backend exposes:
+The app calls these Agora endpoints directly:
 
-- `GET /`
-  simple route listing
-- `GET /health`
-  health check
-- `GET /api/generate-agora-token`
-  returns RTC token, RTM token, channel, uid, and RTM user id
-- `POST /api/invite-agent`
-  starts the cloud agent session
-- `POST /api/interrupt-agent`
-  interrupts the active agent turn
-- `POST /api/stop-conversation`
-  stops the active cloud agent session
+- `POST /v2/projects/{appid}/join`
+- `POST /v2/projects/{appid}/agents/{agentId}/interrupt`
+- `POST /v2/projects/{appid}/agents/{agentId}/leave`
 
-Sample health check:
+The default base URL is:
 
-```bash
-curl -i http://localhost:3000/health
+```text
+https://api.agora.io/api/conversational-ai-agent/v2/projects
 ```
 
-## UI Flow
-
-```mermaid
-flowchart TD
-    A["Pre-session screen"] --> B["Start voice session"]
-    B --> C["Request mic permission if needed"]
-    C --> D["Request token bundle"]
-    D --> E["Invite agent"]
-    E --> F["Join RTC + login RTM"]
-    F --> G["Connected session UI"]
-    G --> H["Mute or unmute mic"]
-    G --> I["Receive transcript and agent state"]
-    G --> J["End session"]
-```
-
-## Local Development Notes
-
-- `usesCleartextTraffic` is enabled for local development so the Android app can call `http://10.0.2.2:3000`
-- the `App Certificate` stays on the backend and never ships inside the APK
-- the Android app keeps the `App ID` locally through `BuildConfig`
-- the bundled server is intentionally lightweight and optimized for quickstart usage, not production hardening
-
-## Base Agent Configuration
-
-The bundled server defines an opinionated default agent in `server/src/index.mjs`:
-
-- Agora-managed conversational agent session
-- Deepgram STT
-- OpenAI LLM
-- MiniMax TTS
-- RTM enabled for transcript and state delivery
-
-The goal is to make the default quickstart runnable without requiring additional vendor API keys for the base path.
-
-## Android Build Commands
+## Build Commands
 
 Compile Kotlin:
 
@@ -304,74 +231,60 @@ Run unit tests:
 JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew :app:testDebugUnitTest
 ```
 
-Check backend syntax:
-
-```bash
-cd server
-node --check src/index.mjs
-```
-
 ## Troubleshooting
 
 ### App says configuration is missing
 
-Check:
+Check `local.properties` for:
 
-- `AGORA_APP_ID` in `local.properties`
-- `AGORA_BACKEND_BASE_URL` in `local.properties`
-- `AGORA_APP_ID` and `AGORA_APP_CERTIFICATE` in `server/.env`
+- `AGORA_APP_ID`
+- `AGORA_APP_CERTIFICATE`
 
-### Emulator cannot reach the backend
-
-Use:
-
-```properties
-AGORA_BACKEND_BASE_URL=http://10.0.2.2:3000
-```
-
-Do not use `http://localhost:3000` from the emulator.
-
-### Physical device cannot reach the backend
-
-Use your Mac's LAN IP instead of `10.0.2.2`, for example:
-
-```properties
-AGORA_BACKEND_BASE_URL=http://192.168.1.10:3000
-```
-
-Make sure the phone and your machine are on the same network.
-
-### Agent starts but does not join correctly
+### Agent start fails
 
 Check:
 
-- the backend server is running
-- `AGORA_AGENT_UID` matches in both the server and Android app
-- `GET /health` returns `200 OK`
-- Agora credentials belong to the same project
+- Conversational AI is enabled on the Agora project
+- `AGORA_APP_ID` and `AGORA_APP_CERTIFICATE` belong to the same project
+- the project supports RTC and RTM
+- the App Certificate value is complete and correct
+
+### RTM login or transcript flow fails
+
+Check:
+
+- the token was generated for the same RTM user ID the app logs in with
+- the channel name is the same for REST, RTC, and RTM
+- the project has RTM available
 
 ### Microphone does not start
 
 Check:
 
 - Android microphone permission is granted
-- the device is not blocking the mic at the system level
-- the app has joined the RTC channel successfully
+- the device is not blocking mic access at the system level
+- the app joined the RTC channel successfully
 
 ## Reference
 
-This Android repository follows the same quickstart shape as the official Next.js sample:
+This Android demo follows the same high-level quickstart shape as the official Next.js sample:
 
 - `AgoraIO-Conversational-AI/agent-quickstart-nextjs`
 
-The Android version adapts that flow for:
+This branch adapts that flow into a single Android app that:
 
-- Kotlin
-- Jetpack Compose
-- coroutines
-- Android microphone permissions
-- emulator and physical-device networking
+- uses Kotlin and Compose
+- generates tokens locally for demo convenience
+- calls Agora REST directly with Retrofit
 
-## License and Usage
+## Security Note
 
-Use this repository as a developer sample and starting point for your own Agora Conversational AI Android integrations. Before shipping to production, move the backend to a hardened deployment, remove local cleartext assumptions, and apply your own monitoring, auth, and secrets management.
+This branch is intentionally convenient, not secure.
+
+Because `AGORA_APP_CERTIFICATE` is packaged into the app, anyone with the built APK can extract it and use your Agora project.
+
+For any shared, published, or production app:
+
+- move token generation to your backend
+- move REST `join`, `interrupt`, and `leave` calls to your backend
+- never ship the App Certificate inside the app

@@ -230,7 +230,7 @@ private fun PreSessionScreen(
         item {
             HeroIntroCard(
                 title = "Start a voice session",
-                subtitle = "Join the Agora channel, invite the cloud agent, and stream live transcript events in one simple Android flow.",
+                subtitle = "Generate local demo credentials, join the Agora channel, start the cloud agent, and stream live transcript events in one Android flow.",
             )
         }
 
@@ -253,7 +253,7 @@ private fun PreSessionScreen(
                 subtitle = "Everything the sample exposes before a live session starts.",
                 statusItems = preSessionStatusChips(uiState),
                 infoItems = listOf(
-                    InfoItemModel("Backend URL", QuickstartConfig.backendBaseUrl),
+                    InfoItemModel("REST base URL", QuickstartConfig.convoAiBaseUrl),
                     InfoItemModel("Agent UID", QuickstartConfig.agentUid.toString()),
                     InfoItemModel(
                         "Microphone",
@@ -280,7 +280,7 @@ fun PreSessionCard(
 ) {
     AgentCard(
         title = "Session setup",
-        subtitle = "Keep the sample easy to follow while still showing the key connection prerequisites.",
+        subtitle = "Keep the sample easy to follow while still showing the key direct-auth prerequisites.",
     ) {
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -297,8 +297,8 @@ fun PreSessionCard(
 
         LabeledIconText(
             icon = Icons.Outlined.Link,
-            label = "Bundled backend",
-            value = "This client calls `/api/generate-agora-token`, `/api/invite-agent`, `/api/interrupt-agent`, and `/api/stop-conversation` from the local bundled server.",
+            label = "Agora REST direct mode",
+            value = "This demo generates RTC, RTM, and agent tokens locally, then calls Agora REST join, interrupt, and leave directly from Android. Demo-only: your App Certificate is packaged into the app.",
         )
 
         if (!uiState.isConfigured && uiState.configMessage != null) {
@@ -347,7 +347,7 @@ fun ConnectedSessionScreen(
                         SessionInfoCard(
                             modifier = Modifier.weight(1.15f),
                             title = "Connected session",
-                            subtitle = "Current backend and realtime state for this live call.",
+                            subtitle = "Current Agora REST and realtime state for this live call.",
                             statusItems = connectedStatusChips(uiState),
                             infoItems = connectedInfoItems(uiState),
                         )
@@ -362,7 +362,7 @@ fun ConnectedSessionScreen(
                     Column(verticalArrangement = Arrangement.spacedBy(VoiceAiLayout.CardSpacing)) {
                         SessionInfoCard(
                             title = "Connected session",
-                            subtitle = "Current backend and realtime state for this live call.",
+                            subtitle = "Current Agora REST and realtime state for this live call.",
                             statusItems = connectedStatusChips(uiState),
                             infoItems = connectedInfoItems(uiState),
                         )
@@ -938,7 +938,7 @@ private fun VoiceAiBackgroundBrush(): Brush {
 private fun preSessionStatusChips(uiState: ConversationUiState): List<StatusChipModel> {
     return listOf(
         StatusChipModel(
-            label = if (uiState.isConfigured) "Backend ready" else "Backend setup needed",
+            label = if (uiState.isConfigured) "Agora REST ready" else "Direct credentials needed",
             highlighted = uiState.isConfigured,
             accent = MaterialTheme.colorScheme.primary,
         ),
@@ -967,7 +967,7 @@ private fun connectedStatusChips(uiState: ConversationUiState): List<StatusChipM
 
     return listOf(
         StatusChipModel(
-            label = "Backend connected",
+            label = "Agora REST active",
             highlighted = true,
             accent = MaterialTheme.colorScheme.primary,
         ),
@@ -991,7 +991,7 @@ private fun connectedStatusChips(uiState: ConversationUiState): List<StatusChipM
 
 private fun connectedInfoItems(uiState: ConversationUiState): List<InfoItemModel> {
     return listOf(
-        InfoItemModel("Backend URL", QuickstartConfig.backendBaseUrl),
+        InfoItemModel("REST base URL", QuickstartConfig.convoAiBaseUrl),
         InfoItemModel("Channel", uiState.channelName ?: "Joining..."),
         InfoItemModel("Local UID", uiState.localUid ?: "Pending"),
         InfoItemModel("RTM status", uiState.rtmConnectionLabel),
@@ -1109,7 +1109,7 @@ private fun previewConnectedState(): ConversationUiState {
             turnId = 3L,
             streamId = 2L,
             speaker = TranscriptSpeaker.AGENT,
-            text = "The backend is connected, the microphone is ready, and the agent is currently speaking.",
+            text = "Agora REST is active, the microphone is ready, and the agent is currently speaking.",
             status = TranscriptTurnStatus.IN_PROGRESS,
             createdAtMillis = 2L,
         ),

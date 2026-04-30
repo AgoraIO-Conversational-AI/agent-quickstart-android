@@ -104,7 +104,7 @@ class ConversationViewModel(
                 sessionManager.setActiveAgentId(activeAgentId)
 
                 val warning = if (inviteResult?.agentId == null) {
-                    "The Android client joined the channel, but the cloud agent invite did not succeed. Check the backend logs and Agora credentials."
+                    "The Android client joined the channel, but the direct Agora REST agent start did not succeed. Verify AGORA_APP_CERTIFICATE and your Agora project settings."
                 } else {
                     null
                 }
@@ -137,10 +137,13 @@ class ConversationViewModel(
             _uiState.update { it.copy(isStopping = true) }
 
             val warning = activeAgentId?.let { agentId ->
+                val channelName = sessionManager.snapshot.value.channelName
                 runCatching {
-                    repository.stopConversation(agentId)
+                    if (channelName != null) {
+                        repository.stopConversation(agentId, channelName)
+                    }
                 }.exceptionOrNull()?.message?.let { message ->
-                    "The local session ended, but the backend could not stop the cloud agent: $message"
+                    "The local session ended, but the direct Agora REST leave request failed: $message"
                 }
             }
 

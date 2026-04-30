@@ -52,7 +52,7 @@ class AgoraConversationSessionManager(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val renewMutex = Mutex()
     private val transcriptAssembler = TranscriptAssembler()
-    private val backendRepository = ConversationRepository()
+    private val repository = ConversationRepository()
     private val audioSessionManager = AudioSessionManager(
         context = appContext,
     ) { source, code, message ->
@@ -403,7 +403,7 @@ class AgoraConversationSessionManager(
                     }
                 } catch (error: Throwable) {
                     addIssue(
-                        source = "backend",
+                        source = "token",
                         code = "renew-token",
                         message = error.message ?: "Failed to renew Agora tokens.",
                     )
@@ -534,6 +534,7 @@ class AgoraConversationSessionManager(
             return
         }
         val agentId = activeAgentId ?: return
+        val channelName = currentChannel ?: return
         if (_snapshot.value.agentState != AgentConversationState.SPEAKING) {
             return
         }
@@ -552,7 +553,10 @@ class AgoraConversationSessionManager(
         lastInterruptRequestAtMs = now
         scope.launch {
             runCatching {
-                backendRepository.interruptConversation(agentId)
+                repository.interruptConversation(
+                    agentId = agentId,
+                    channelName = channelName,
+                )
             }.onSuccess {
                 Log.i(
                     TAG,
