@@ -14,7 +14,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androidengineers.agent_quickstart_android.ui.ConversationScreen
 import com.androidengineers.agent_quickstart_android.ui.ConversationViewModel
 import com.androidengineers.agent_quickstart_android.ui.theme.AgentquickstartandroidTheme
@@ -28,7 +28,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             AgentquickstartandroidTheme {
-                val uiState by viewModel.uiState.collectAsState()
+                val uiState by viewModel.uiState.collectAsStateWithLifecycle()
                 val context = LocalContext.current
                 val currentViewModel by rememberUpdatedState(viewModel)
                 val permissionLauncher = rememberLauncherForActivityResult(

@@ -39,4 +39,38 @@ class TurnManagerTest {
         assertEquals(TurnState.USER_TURN_FINALIZING, manager.currentState())
         assertTrue(manager.isAsrGateOpen())
     }
+
+    @Test
+    fun remoteSpeakingTransitionsBackToIdleAfterOutputCooldownExpires() {
+        val manager = TurnManager { _, _ -> }
+
+        manager.onRemoteAgentState(AgentConversationState.SPEAKING)
+        manager.currentStateDurationMs(nowMs = System.currentTimeMillis() + 2_000L)
+
+        assertEquals(TurnState.IDLE, manager.currentState())
+        assertTrue(manager.isAsrGateOpen())
+    }
+
+    @Test
+    fun userSpeechIsIgnoredWhileAgentOutputSuppressionIsActive() {
+        val manager = TurnManager { _, _ -> }
+
+        manager.onRemoteAgentState(AgentConversationState.SPEAKING)
+        manager.onUserSpeechDetected()
+
+        assertEquals(TurnState.AGENT_SPEAKING, manager.currentState())
+        assertFalse(manager.isAsrGateOpen())
+    }
+
+    @Test
+    fun resetClearsGateAndReturnsToIdle() {
+        val manager = TurnManager { _, _ -> }
+
+        manager.onRemoteAgentState(AgentConversationState.THINKING)
+        manager.onBargeInDetected()
+        manager.reset()
+
+        assertEquals(TurnState.IDLE, manager.currentState())
+        assertTrue(manager.isAsrGateOpen())
+    }
 }

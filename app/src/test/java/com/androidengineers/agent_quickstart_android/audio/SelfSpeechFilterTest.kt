@@ -1,6 +1,7 @@
 package com.androidengineers.agent_quickstart_android.audio
 
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -33,5 +34,38 @@ class SelfSpeechFilterTest {
         val decision = filter.shouldDiscard("book the morning flight instead")
 
         assertFalse(decision.discard)
+    }
+
+    @Test
+    fun returnsMissingContextWhenAgentTextIsNotSet() {
+        val filter = SelfSpeechFilter()
+
+        val decision = filter.shouldDiscard("hello there")
+
+        assertFalse(decision.discard)
+        assertEquals("missing-context", decision.reason)
+    }
+
+    @Test
+    fun clearRemovesTheCurrentAgentText() {
+        val filter = SelfSpeechFilter()
+        filter.updateCurrentAgentText("Please repeat that back to me.")
+        filter.clear()
+
+        val decision = filter.shouldDiscard("repeat that back to me")
+
+        assertFalse(decision.discard)
+        assertEquals("missing-context", decision.reason)
+    }
+
+    @Test
+    fun acceptsCustomInterruptCommandPrefixes() {
+        val filter = SelfSpeechFilter(interruptCommands = setOf("hold up"))
+        filter.updateCurrentAgentText("I can keep going if you want.")
+
+        val decision = filter.shouldDiscard("hold up a second")
+
+        assertFalse(decision.discard)
+        assertEquals("protected-interrupt-command", decision.reason)
     }
 }

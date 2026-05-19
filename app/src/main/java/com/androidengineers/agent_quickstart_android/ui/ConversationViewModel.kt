@@ -2,17 +2,11 @@ package com.androidengineers.agent_quickstart_android.ui
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import com.androidengineers.agent_quickstart_android.config.QuickstartConfig
 import com.androidengineers.agent_quickstart_android.data.ConversationRepository
-import com.androidengineers.agent_quickstart_android.model.AgentVisualState
 import com.androidengineers.agent_quickstart_android.model.ConversationUiState
-import com.androidengineers.agent_quickstart_android.model.SessionSnapshot
-import com.androidengineers.agent_quickstart_android.model.TranscriptTurnStatus
 import com.androidengineers.agent_quickstart_android.rtc.AgoraConversationSessionManager
-import io.agora.rtc2.Constants
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,18 +20,17 @@ class ConversationViewModel(
 ) : AndroidViewModel(application) {
     private val repository = ConversationRepository()
     private val sessionManager = AgoraConversationSessionManager(application)
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    private val _uiState = MutableStateFlow(freshUiState())
+    private val _uiState = MutableStateFlow(ConversationUiStateMapper.freshUiState())
 
     val uiState: StateFlow<ConversationUiState> = _uiState.asStateFlow()
 
     private var activeAgentId: String? = null
 
     init {
-        scope.launch {
+        viewModelScope.launch {
             sessionManager.snapshot.collectLatest { snapshot ->
                 _uiState.update { current ->
-                    current.withSession(snapshot)
+                    ConversationUiStateMapper.mergeSession(current, snapshot)
                 }
             }
         }
@@ -55,7 +48,7 @@ class ConversationViewModel(
         if (!QuickstartConfig.isConfigured) {
             _uiState.update {
                 it.copy(
-                    errorMessage = configurationHelpMessage(),
+                    errorMessage = quickstartConfigMessage(),
                     warningMessage = null,
                 )
             }
@@ -71,7 +64,7 @@ class ConversationViewModel(
             return
         }
 
-        scope.launch {
+        viewModelScope.launch {
             _uiState.update {
                 it.copy(
                     isStarting = true,
@@ -107,16 +100,19 @@ class ConversationViewModel(
                 }
 
                 _uiState.update { current ->
-                    current.copy(
-                        isStarting = false,
-                        inConversation = true,
-                        warningMessage = warning,
-                    ).withSession(sessionManager.snapshot.value)
+                    ConversationUiStateMapper.mergeSession(
+                        current.copy(
+                            isStarting = false,
+                            inConversation = true,
+                            warningMessage = warning,
+                        ),
+                        sessionManager.snapshot.value,
+                    )
                 }
             }.onFailure { error ->
                 sessionManager.disconnect(resetSnapshot = true)
                 activeAgentId = null
-                _uiState.value = freshUiState(
+                _uiState.value = ConversationUiStateMapper.freshUiState(
                     permissionGranted = _uiState.value.microphonePermissionGranted,
                     errorMessage = error.message ?: "Unable to start the Agora conversation.",
                 )
@@ -130,7 +126,7 @@ class ConversationViewModel(
             return
         }
 
-        scope.launch {
+        viewModelScope.launch {
             _uiState.update { it.copy(isStopping = true) }
 
             val warning = activeAgentId?.let { agentId ->
@@ -147,7 +143,8 @@ class ConversationViewModel(
             activeAgentId = null
             sessionManager.setActiveAgentId(null)
             sessionManager.disconnect(resetSnapshot = true)
-            _uiState.value = freshUiState(
+
+            _uiState.value = ConversationUiStateMapper.freshUiState(
                 permissionGranted = _uiState.value.microphonePermissionGranted,
                 warningMessage = warning,
             )
@@ -172,89 +169,11 @@ class ConversationViewModel(
         super.onCleared()
     }
 
-    private fun freshUiState(
-        permissionGranted: Boolean = false,
-        warningMessage: String? = null,
-        errorMessage: String? = null,
-    ): ConversationUiState {
-        return ConversationUiState(
-            isConfigured = QuickstartConfig.isConfigured,
-            configMessage = configurationHelpMessage(),
-            microphonePermissionGranted = permissionGranted,
-            warningMessage = warningMessage,
-            errorMessage = errorMessage,
-        )
-    }
-
-    private fun configurationHelpMessage(): String? {
+    private fun quickstartConfigMessage(): String? {
         val missing = QuickstartConfig.missingRequiredValues()
         if (missing.isEmpty()) {
             return null
         }
         return "Add ${missing.joinToString()} to local.properties before starting the Android quickstart."
-    }
-
-    private fun ConversationUiState.withSession(snapshot: SessionSnapshot): ConversationUiState {
-        val liveTranscript = snapshot.transcriptTurns.lastOrNull {
-            it.status == TranscriptTurnStatus.IN_PROGRESS
-        }
-        val history = snapshot.transcriptTurns.filter {
-            it.status != TranscriptTurnStatus.IN_PROGRESS
-        }
-
-        return copy(
-            channelName = snapshot.channelName,
-            localUid = snapshot.localRtcUid.takeIf { it != 0 }?.toString(),
-            rtcConnectionLabel = snapshot.rtcConnectionState.toRtcLabel(),
-            rtmConnectionLabel = snapshot.rtmConnectionState.replace('_', ' ').lowercase()
-                .replaceFirstChar { it.uppercase() },
-            agentVisualState = snapshot.toVisualState(),
-            agentStateLabel = snapshot.toAgentLabel(),
-            turnState = snapshot.turnState,
-            micEnabled = snapshot.micEnabled,
-            micRequestedEnabled = snapshot.micRequestedEnabled,
-            micAutoMuted = snapshot.micAutoMuted,
-            transcriptHistory = history,
-            liveTranscript = liveTranscript,
-            issues = snapshot.issues,
-            inConversation = inConversation || snapshot.channelName != null,
-        )
-    }
-
-    private fun SessionSnapshot.toVisualState(): AgentVisualState {
-        return when {
-            rtcConnectionState == Constants.CONNECTION_STATE_DISCONNECTED ||
-                rtcConnectionState == Constants.CONNECTION_STATE_FAILED -> AgentVisualState.DISCONNECTED
-
-            rtcConnectionState == Constants.CONNECTION_STATE_CONNECTING ||
-                rtcConnectionState == Constants.CONNECTION_STATE_RECONNECTING -> AgentVisualState.WAITING
-
-            !isAgentRtcConnected -> AgentVisualState.WAITING
-            agentState.name == "LISTENING" -> AgentVisualState.LISTENING
-            agentState.name == "THINKING" -> AgentVisualState.THINKING
-            agentState.name == "SPEAKING" -> AgentVisualState.SPEAKING
-            else -> AgentVisualState.IDLE
-        }
-    }
-
-    private fun SessionSnapshot.toAgentLabel(): String {
-        return when (toVisualState()) {
-            AgentVisualState.WAITING -> "Waiting for the cloud agent"
-            AgentVisualState.LISTENING -> "Listening for your turn"
-            AgentVisualState.THINKING -> "Thinking through a response"
-            AgentVisualState.SPEAKING -> "Speaking back in real time · barge-in ready"
-            AgentVisualState.IDLE -> "Connected and ready"
-            AgentVisualState.DISCONNECTED -> "Connection interrupted"
-        }
-    }
-
-    private fun Int.toRtcLabel(): String {
-        return when (this) {
-            Constants.CONNECTION_STATE_CONNECTED -> "RTC connected"
-            Constants.CONNECTION_STATE_CONNECTING -> "RTC connecting"
-            Constants.CONNECTION_STATE_RECONNECTING -> "RTC reconnecting"
-            Constants.CONNECTION_STATE_FAILED -> "RTC failed"
-            else -> "RTC idle"
-        }
     }
 }
