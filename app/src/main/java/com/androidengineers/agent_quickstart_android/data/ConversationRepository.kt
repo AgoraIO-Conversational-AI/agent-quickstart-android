@@ -12,10 +12,9 @@ class ConversationRepository(
     }
 
     suspend fun inviteAgent(
-        requesterId: String,
         channelName: String,
     ): AgentInviteResult {
-        return api.inviteAgent(requesterId, channelName)
+        return api.inviteAgent(channelName)
     }
 
     suspend fun stopConversation(

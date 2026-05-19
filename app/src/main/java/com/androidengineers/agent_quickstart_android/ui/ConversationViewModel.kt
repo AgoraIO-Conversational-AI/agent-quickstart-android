@@ -84,10 +84,7 @@ class ConversationViewModel(
                 val bootstrap = repository.requestSessionBootstrap()
                 val inviteJob = async {
                     runCatching {
-                        repository.inviteAgent(
-                            requesterId = bootstrap.uid,
-                            channelName = bootstrap.channel,
-                        )
+                        repository.inviteAgent(channelName = bootstrap.channel)
                     }.getOrNull()
                 }
 

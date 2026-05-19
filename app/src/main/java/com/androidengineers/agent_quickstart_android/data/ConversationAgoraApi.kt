@@ -53,7 +53,6 @@ class ConversationAgoraApi(
     }
 
     suspend fun inviteAgent(
-        requesterId: String,
         channelName: String,
     ): AgentInviteResult {
         val agentToken = tokenFactory.buildAgentRestToken(channelName)
@@ -67,7 +66,8 @@ class ConversationAgoraApi(
                     channel = channelName,
                     token = agentToken,
                     agentRtcUid = QuickstartConfig.agentUid.toString(),
-                    remoteRtcUids = listOf(requesterId),
+                    // Subscribe to all remote users for demo robustness.
+                    remoteRtcUids = listOf("*"),
                     enableStringUid = false,
                     idleTimeout = 30,
                     geofence = JoinGeofence(
@@ -107,19 +107,19 @@ class ConversationAgoraApi(
                     turnDetection = JoinTurnDetection(
                         mode = "default",
                         config = JoinTurnDetectionConfig(
-                            speechThreshold = 0.5,
+                            speechThreshold = 0.38,
                             startOfSpeech = JoinStartOfSpeech(
                                 mode = "vad",
                                 vadConfig = JoinStartVadConfig(
                                     interruptDurationMs = 160,
                                     speakingInterruptDurationMs = 160,
-                                    prefixPaddingMs = 300,
+                                    prefixPaddingMs = 480,
                                 ),
                             ),
                             endOfSpeech = JoinEndOfSpeech(
                                 mode = "vad",
                                 vadConfig = JoinEndVadConfig(
-                                    silenceDurationMs = 480,
+                                    silenceDurationMs = 720,
                                 ),
                             ),
                         ),
@@ -379,7 +379,7 @@ class ConversationAgoraApi(
         const val DEFAULT_PRESET =
             "deepgram_nova_3,openai_gpt_4o_mini,minimax_speech_2_6_turbo"
         const val DEFAULT_GREETING =
-            "Hi there! I'm Ada, your virtual assistant from Agora. How can I help?"
+            "Hi there!"
         const val DEFAULT_FAILURE_MESSAGE = "Please wait a moment."
 
         const val ADA_PROMPT = """
