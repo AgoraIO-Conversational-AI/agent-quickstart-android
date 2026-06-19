@@ -143,7 +143,6 @@ class ConversationViewModel(
             activeAgentId = null
             sessionManager.setActiveAgentId(null)
             sessionManager.disconnect(resetSnapshot = true)
-
             _uiState.value = ConversationUiStateMapper.freshUiState(
                 permissionGranted = _uiState.value.microphonePermissionGranted,
                 warningMessage = warning,

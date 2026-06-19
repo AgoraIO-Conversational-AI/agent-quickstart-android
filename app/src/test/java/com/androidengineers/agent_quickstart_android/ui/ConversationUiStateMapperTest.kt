@@ -17,7 +17,7 @@ import org.junit.Test
 
 class ConversationUiStateMapperTest {
     @Test
-    fun `freshUiState carries the default flags`() {
+    fun freshUiStateCarriesTheDefaultFlags() {
         val state = ConversationUiStateMapper.freshUiState(
             permissionGranted = true,
             warningMessage = "warning",
@@ -31,7 +31,7 @@ class ConversationUiStateMapperTest {
     }
 
     @Test
-    fun `mergeSession maps live transcript history and labels`() {
+    fun mergeSessionMapsLiveTranscriptHistoryAndLabels() {
         val currentState = ConversationUiState(
             inConversation = true,
             microphonePermissionGranted = true,
@@ -89,7 +89,7 @@ class ConversationUiStateMapperTest {
     }
 
     @Test
-    fun `mergeSession maps waiting when rtc is connecting`() {
+    fun mergeSessionMapsWaitingWhenRtcIsConnecting() {
         val merged = ConversationUiStateMapper.mergeSession(
             currentState = ConversationUiState(),
             snapshot = SessionSnapshot(
@@ -105,7 +105,7 @@ class ConversationUiStateMapperTest {
     }
 
     @Test
-    fun `mergeSession maps disconnected when rtc fails`() {
+    fun mergeSessionMapsDisconnectedWhenRtcFails() {
         val merged = ConversationUiStateMapper.mergeSession(
             currentState = ConversationUiState(inConversation = true),
             snapshot = SessionSnapshot(
