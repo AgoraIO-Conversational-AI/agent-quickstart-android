@@ -48,7 +48,7 @@ class ConversationViewModel(
         if (!QuickstartConfig.isConfigured) {
             _uiState.update {
                 it.copy(
-                    errorMessage = quickstartConfigMessage(),
+                    errorMessage = QuickstartConfig.startupHelpMessage(),
                     warningMessage = null,
                 )
             }
@@ -166,13 +166,5 @@ class ConversationViewModel(
     override fun onCleared() {
         sessionManager.release()
         super.onCleared()
-    }
-
-    private fun quickstartConfigMessage(): String? {
-        val missing = QuickstartConfig.missingRequiredValues()
-        if (missing.isEmpty()) {
-            return null
-        }
-        return "Add ${missing.joinToString()} to local.properties before starting the Android quickstart."
     }
 }

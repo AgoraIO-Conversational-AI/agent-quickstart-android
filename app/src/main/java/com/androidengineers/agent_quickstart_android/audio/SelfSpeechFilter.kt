@@ -1,6 +1,7 @@
 package com.androidengineers.agent_quickstart_android.audio
 
 import kotlin.math.max
+import java.util.Locale
 
 data class SelfSpeechDecision(
     val discard: Boolean,
@@ -77,7 +78,7 @@ class SelfSpeechFilter(
 
     private fun normalize(text: String): String {
         return text
-            .lowercase()
+            .lowercase(Locale.ROOT)
             .replace(Regex("[^a-z0-9\\s]"), " ")
             .replace(Regex("\\s+"), " ")
             .trim()

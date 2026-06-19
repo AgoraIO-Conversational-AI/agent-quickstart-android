@@ -26,6 +26,7 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedIconButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -57,33 +58,42 @@ fun AgentCard(
 ) {
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(24.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)),
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface,
+            containerColor = Color.Transparent,
         ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             if (title != null || subtitle != null) {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    title?.let {
-                        Text(
-                            text = it,
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
-                    subtitle?.let {
-                        Text(
-                            text = it,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.5f),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        title?.let {
+                            Text(
+                                text = it,
+                                style = MaterialTheme.typography.titleLarge,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+                        subtitle?.let {
+                            Text(
+                                text = it,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 }
             }
@@ -169,20 +179,18 @@ fun StatusChip(
                 modifier = Modifier
                     .size(8.dp)
                     .clip(CircleShape)
-                    .background(
-                        if (highlighted) accentColor else MaterialTheme.colorScheme.outline,
-                    )
+                    .background(if (highlighted) accentColor else MaterialTheme.colorScheme.outlineVariant)
             )
         },
         border = BorderStroke(
             1.dp,
-            if (highlighted) accentColor.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant,
+            MaterialTheme.colorScheme.outlineVariant,
         ),
         colors = FilterChipDefaults.filterChipColors(
             disabledContainerColor = if (highlighted) {
-                accentColor.copy(alpha = 0.12f)
+                accentColor.copy(alpha = 0.08f)
             } else {
-                MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.45f)
+                MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.35f)
             },
             disabledLabelColor = if (highlighted) {
                 MaterialTheme.colorScheme.onSurface
@@ -190,7 +198,7 @@ fun StatusChip(
                 MaterialTheme.colorScheme.onSurfaceVariant
             },
             disabledLeadingIconColor = accentColor,
-            selectedContainerColor = accentColor.copy(alpha = 0.12f),
+            selectedContainerColor = accentColor.copy(alpha = 0.08f),
             selectedLabelColor = MaterialTheme.colorScheme.onSurface,
         ),
     )
@@ -251,17 +259,17 @@ fun AgentAvatarBadge(
     val initials = name
         .split(" ")
         .take(2)
-        .mapNotNull { it.firstOrNull()?.uppercase() }
+        .mapNotNull { it.firstOrNull()?.uppercaseChar()?.toString() }
         .joinToString("")
 
     Box(
         modifier = modifier
             .size(72.dp)
             .clip(CircleShape)
-            .background(highlightColor.copy(alpha = 0.16f))
+            .background(highlightColor.copy(alpha = 0.12f))
             .border(
                 width = 1.dp,
-                color = highlightColor.copy(alpha = 0.28f),
+                color = MaterialTheme.colorScheme.outlineVariant,
                 shape = CircleShape,
             ),
         contentAlignment = Alignment.Center,
@@ -269,7 +277,7 @@ fun AgentAvatarBadge(
         Text(
             text = initials.ifBlank { "AI" },
             style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.primary,
+            color = highlightColor,
             fontWeight = FontWeight.Bold,
         )
     }
@@ -284,7 +292,7 @@ fun InfoField(
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(18.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f))
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.4f))
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -299,6 +307,7 @@ fun InfoField(
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
+            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
         )
     }
 }
@@ -314,7 +323,7 @@ fun LabeledIconText(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.55f))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.45f))
             .padding(horizontal = 14.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,

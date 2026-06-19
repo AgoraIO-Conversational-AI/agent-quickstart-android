@@ -6,6 +6,7 @@ import com.androidengineers.agent_quickstart_android.model.ConversationUiState
 import com.androidengineers.agent_quickstart_android.model.SessionSnapshot
 import com.androidengineers.agent_quickstart_android.model.TranscriptTurnStatus
 import io.agora.rtc2.Constants
+import java.util.Locale
 
 internal object ConversationUiStateMapper {
     fun freshUiState(
@@ -15,7 +16,7 @@ internal object ConversationUiStateMapper {
     ): ConversationUiState {
         return ConversationUiState(
             isConfigured = QuickstartConfig.isConfigured,
-            configMessage = configurationHelpMessage(),
+            configMessage = QuickstartConfig.startupHelpMessage(),
             microphonePermissionGranted = permissionGranted,
             warningMessage = warningMessage,
             errorMessage = errorMessage,
@@ -37,8 +38,10 @@ internal object ConversationUiStateMapper {
             channelName = snapshot.channelName,
             localUid = snapshot.localRtcUid.takeIf { it != 0 }?.toString(),
             rtcConnectionLabel = snapshot.rtcConnectionState.toRtcLabel(),
-            rtmConnectionLabel = snapshot.rtmConnectionState.replace('_', ' ').lowercase()
-                .replaceFirstChar { it.uppercase() },
+            rtmConnectionLabel = snapshot.rtmConnectionState
+                .replace('_', ' ')
+                .lowercase(Locale.ROOT)
+                .replaceFirstChar { it.titlecase(Locale.ROOT) },
             agentVisualState = snapshot.toVisualState(),
             agentStateLabel = snapshot.toAgentLabel(),
             turnState = snapshot.turnState,
@@ -50,14 +53,6 @@ internal object ConversationUiStateMapper {
             issues = snapshot.issues,
             inConversation = currentState.inConversation || snapshot.channelName != null,
         )
-    }
-
-    private fun configurationHelpMessage(): String? {
-        val missing = QuickstartConfig.missingRequiredValues()
-        if (missing.isEmpty()) {
-            return null
-        }
-        return "Add ${missing.joinToString()} to local.properties before starting the Android quickstart."
     }
 
     private fun SessionSnapshot.toVisualState(): AgentVisualState {

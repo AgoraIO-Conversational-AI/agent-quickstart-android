@@ -22,4 +22,12 @@ object QuickstartConfig {
 
     val isConfigured: Boolean
         get() = missingRequiredValues().isEmpty()
+
+    fun startupHelpMessage(): String? {
+        val missing = missingRequiredValues()
+        if (missing.isEmpty()) {
+            return null
+        }
+        return "Add ${missing.joinToString()} to local.properties before starting the Android quickstart."
+    }
 }

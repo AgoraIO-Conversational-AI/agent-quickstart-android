@@ -1,13 +1,6 @@
 package com.androidengineers.agent_quickstart_android.ui
 
 import android.content.res.Configuration
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,7 +19,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -52,18 +44,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import java.util.Locale
 import com.androidengineers.agent_quickstart_android.audio.TurnState
-import com.androidengineers.agent_quickstart_android.config.QuickstartConfig
 import com.androidengineers.agent_quickstart_android.model.AgentVisualState
 import com.androidengineers.agent_quickstart_android.model.ConversationUiState
 import com.androidengineers.agent_quickstart_android.model.SessionIssue
@@ -144,7 +132,7 @@ fun VoiceAiAppScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(VoiceAiBackgroundBrush()),
+                .background(MaterialTheme.colorScheme.background),
         ) {
             BoxWithConstraints(
                 modifier = Modifier
@@ -188,17 +176,17 @@ fun VoiceAiAppScreen(
 @Composable
 private fun VoiceAiTopBar() {
     Surface(
-        color = MaterialTheme.colorScheme.background.copy(alpha = 0.92f),
+        color = MaterialTheme.colorScheme.background.copy(alpha = 0.96f),
         tonalElevation = 0.dp,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = VoiceAiLayout.ScreenPadding, vertical = 18.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             StatusChip(
-                text = "Agora Android sample",
+                text = "console",
                 highlighted = true,
                 accentColor = MaterialTheme.colorScheme.primary,
             )
@@ -208,7 +196,7 @@ private fun VoiceAiTopBar() {
                 color = MaterialTheme.colorScheme.onBackground,
             )
             Text(
-                text = "A Jetpack Compose quickstart for realtime voice sessions with Agora Conversational AI.",
+                text = "Build and monitor realtime voice sessions with Agora Conversational AI.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
             )
@@ -241,47 +229,29 @@ private fun PreSessionScreen(
         )
 
         item {
-            PreSessionCard(
+            SessionSetupCard(
                 uiState = uiState,
                 onStartRequested = onStartRequested,
-            )
-        }
-
-        item {
-            SessionInfoCard(
-                title = "Developer details",
-                subtitle = "Everything the sample exposes before a live session starts.",
-                statusItems = preSessionStatusChips(uiState),
-                infoItems = listOf(
-                    InfoItemModel("REST base URL", QuickstartConfig.convoAiBaseUrl),
-                    InfoItemModel("Agent UID", QuickstartConfig.agentUid.toString()),
-                    InfoItemModel(
-                        "Microphone",
-                        if (uiState.microphonePermissionGranted) {
-                            "Permission granted"
-                        } else {
-                            "Permission required"
-                        },
-                    ),
-                    InfoItemModel(
-                        "Configuration",
-                        if (uiState.isConfigured) "Ready to start" else "local.properties needed",
-                    ),
-                ),
             )
         }
     }
 }
 
 @Composable
-fun PreSessionCard(
+private fun SessionSetupCard(
     uiState: ConversationUiState,
     onStartRequested: () -> Unit,
 ) {
     AgentCard(
-        title = "Session setup",
-        subtitle = "Keep the sample easy to follow while still showing the key direct-auth prerequisites.",
+        title = "Ready to start",
+        subtitle = "Everything needed for the demo is condensed into one card so the page stays focused.",
     ) {
+        LabeledIconText(
+            icon = Icons.Outlined.Link,
+            label = "Agora REST direct mode",
+            value = "This demo generates RTC, RTM, and agent tokens locally, then calls Agora REST join, interrupt, and leave directly from Android. Demo-only: your App Certificate is packaged into the app.",
+        )
+
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -295,10 +265,21 @@ fun PreSessionCard(
             }
         }
 
-        LabeledIconText(
-            icon = Icons.Outlined.Link,
-            label = "Agora REST direct mode",
-            value = "This demo generates RTC, RTM, and agent tokens locally, then calls Agora REST join, interrupt, and leave directly from Android. Demo-only: your App Certificate is packaged into the app.",
+        ResponsiveInfoGrid(
+            items = listOf(
+                InfoItemModel(
+                    label = "Configuration",
+                    value = if (uiState.isConfigured) "Ready to start" else "local.properties needed",
+                ),
+                InfoItemModel(
+                    label = "Microphone",
+                    value = if (uiState.microphonePermissionGranted) {
+                        "Permission granted"
+                    } else {
+                        "Permission required"
+                    },
+                ),
+            ),
         )
 
         if (!uiState.isConfigured && uiState.configMessage != null) {
@@ -344,12 +325,9 @@ fun ConnectedSessionScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(VoiceAiLayout.CardSpacing),
                     ) {
-                        SessionInfoCard(
+                        LiveSessionCard(
                             modifier = Modifier.weight(1.15f),
-                            title = "Connected session",
-                            subtitle = "Current Agora REST and realtime state for this live call.",
-                            statusItems = connectedStatusChips(uiState),
-                            infoItems = connectedInfoItems(uiState),
+                            uiState = uiState,
                         )
                         AgentPresenceCard(
                             modifier = Modifier.weight(0.85f),
@@ -360,11 +338,8 @@ fun ConnectedSessionScreen(
                     }
                 } else {
                     Column(verticalArrangement = Arrangement.spacedBy(VoiceAiLayout.CardSpacing)) {
-                        SessionInfoCard(
-                            title = "Connected session",
-                            subtitle = "Current Agora REST and realtime state for this live call.",
-                            statusItems = connectedStatusChips(uiState),
-                            infoItems = connectedInfoItems(uiState),
+                        LiveSessionCard(
+                            uiState = uiState,
                         )
                         AgentPresenceCard(
                             visualState = uiState.agentVisualState,
@@ -413,23 +388,20 @@ private fun HeroIntroCard(
 }
 
 @Composable
-private fun SessionInfoCard(
+private fun LiveSessionCard(
     modifier: Modifier = Modifier,
-    title: String,
-    subtitle: String,
-    statusItems: List<StatusChipModel>,
-    infoItems: List<InfoItemModel>,
+    uiState: ConversationUiState,
 ) {
     AgentCard(
         modifier = modifier,
-        title = title,
-        subtitle = subtitle,
+        title = "Live call snapshot",
+        subtitle = "A compact view of the channel, transport health, and microphone state.",
     ) {
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            statusItems.forEach { item ->
+            connectedStatusChips(uiState).forEach { item ->
                 StatusChip(
                     text = item.label,
                     highlighted = item.highlighted,
@@ -438,7 +410,9 @@ private fun SessionInfoCard(
             }
         }
 
-        ResponsiveInfoGrid(items = infoItems)
+        ResponsiveInfoGrid(
+            items = connectedInfoItems(uiState),
+        )
     }
 }
 
@@ -491,16 +465,17 @@ private fun AgentPresenceCard(
     AgentCard(
         modifier = modifier,
         title = "Agent presence",
-        subtitle = "A lightweight voice-first surface inspired by the public agent-uikit Android library.",
+        subtitle = "Current agent state without the extra decoration.",
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
-            AgentOrb(
-                visualState = visualState,
-                modifier = Modifier.wrapContentHeight(),
+            AgentAvatarBadge(
+                name = "Agora AI",
+                modifier = Modifier.size(88.dp),
+                highlightColor = visualState.accentColor(),
             )
             Text(
                 text = label,
@@ -514,72 +489,6 @@ private fun AgentPresenceCard(
                 accentColor = visualState.accentColor(),
             )
         }
-    }
-}
-
-@Composable
-fun AgentOrb(
-    visualState: AgentVisualState,
-    modifier: Modifier = Modifier,
-    orbSize: Dp = 208.dp,
-) {
-    val accent = visualState.accentColor()
-    val transition = rememberInfiniteTransition(label = "agent-orb")
-    val pulse by transition.animateFloat(
-        initialValue = 0.94f,
-        targetValue = 1.06f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(
-                durationMillis = when (visualState) {
-                    AgentVisualState.LISTENING -> 900
-                    AgentVisualState.THINKING -> 1100
-                    AgentVisualState.SPEAKING -> 700
-                    AgentVisualState.WAITING -> 1300
-                    AgentVisualState.IDLE -> 1400
-                    AgentVisualState.DISCONNECTED -> 1500
-                },
-                easing = FastOutSlowInEasing,
-            ),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "orb-pulse",
-    )
-
-    Box(
-        modifier = modifier.size(orbSize),
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(orbSize * 0.89f)
-                .scale(pulse)
-                .clip(CircleShape)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            accent.copy(alpha = 0.18f),
-                            accent.copy(alpha = 0.06f),
-                            Color.Transparent,
-                        ),
-                    )
-                ),
-        )
-        Canvas(modifier = Modifier.size(orbSize * 0.82f)) {
-            drawCircle(
-                color = accent.copy(alpha = 0.22f),
-                style = Stroke(width = 10.dp.toPx()),
-            )
-            drawCircle(
-                color = accent.copy(alpha = 0.12f),
-                radius = minOf(size.width, size.height) * 0.36f,
-                style = Stroke(width = 18.dp.toPx(), cap = StrokeCap.Round),
-            )
-        }
-        AgentAvatarBadge(
-            name = "Agora AI",
-            modifier = Modifier.size(orbSize * 0.38f),
-            highlightColor = accent,
-        )
     }
 }
 
@@ -745,13 +654,13 @@ private fun IssuesPanel(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         AgentAvatarBadge(
-                            name = issue.source.uppercase(),
+                            name = issue.source.uppercase(Locale.ROOT),
                             modifier = Modifier.size(42.dp),
                             highlightColor = MaterialTheme.colorScheme.error,
                         )
                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(
-                                text = issue.source.uppercase(),
+                                text = issue.source.uppercase(Locale.ROOT),
                                 style = MaterialTheme.typography.labelLarge,
                                 color = MaterialTheme.colorScheme.onSurface,
                             )
@@ -924,17 +833,6 @@ private fun DismissibleMessageCard(
 }
 
 @Composable
-private fun VoiceAiBackgroundBrush(): Brush {
-    return Brush.verticalGradient(
-        colors = listOf(
-            MaterialTheme.colorScheme.background,
-            MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.7f),
-            MaterialTheme.colorScheme.background,
-        ),
-    )
-}
-
-@Composable
 private fun preSessionStatusChips(uiState: ConversationUiState): List<StatusChipModel> {
     return listOf(
         StatusChipModel(
@@ -991,7 +889,6 @@ private fun connectedStatusChips(uiState: ConversationUiState): List<StatusChipM
 
 private fun connectedInfoItems(uiState: ConversationUiState): List<InfoItemModel> {
     return listOf(
-        InfoItemModel("REST base URL", QuickstartConfig.convoAiBaseUrl),
         InfoItemModel("Channel", uiState.channelName ?: "Joining..."),
         InfoItemModel("Local UID", uiState.localUid ?: "Pending"),
         InfoItemModel("RTM status", uiState.rtmConnectionLabel),

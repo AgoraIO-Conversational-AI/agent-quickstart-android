@@ -6,6 +6,7 @@ import com.androidengineers.agent_quickstart_android.model.AgoraTokenBundle
 import com.androidengineers.agent_quickstart_android.model.RenewalTokens
 import com.google.gson.annotations.SerializedName
 import java.io.IOException
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 import okhttp3.OkHttpClient
 import okhttp3.ResponseBody
@@ -175,7 +176,7 @@ class ConversationAgoraApi(
     }
 
     private fun mapGeofenceArea(area: String): String {
-        return when (area.trim().uppercase()) {
+        return when (area.trim().uppercase(Locale.ROOT)) {
             "EU", "EUROPE" -> "EUROPE"
             "AP", "ASIA" -> "ASIA"
             "INDIA" -> "INDIA"

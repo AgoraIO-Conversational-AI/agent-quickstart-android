@@ -44,6 +44,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import java.util.Locale
 
 class AgoraConversationSessionManager(
     context: Context,
@@ -507,7 +508,7 @@ class AgoraConversationSessionManager(
     }
 
     private fun String.toAgentConversationState(): AgentConversationState {
-        return when (lowercase()) {
+        return when (lowercase(Locale.ROOT)) {
             "idle" -> AgentConversationState.IDLE
             "listening" -> AgentConversationState.LISTENING
             "thinking" -> AgentConversationState.THINKING
@@ -691,7 +692,7 @@ class AgoraConversationSessionManager(
                 -> addIssue(
                     source = "rtm",
                     code = event.getReasonCode().name,
-                    message = "RTM link ${event.getCurrentState().name.lowercase()} (${event.getReasonCode().name}).",
+                    message = "RTM link ${event.getCurrentState().name.lowercase(Locale.ROOT)} (${event.getReasonCode().name}).",
                 )
 
                 else -> Unit
