@@ -6,12 +6,14 @@ import androidx.lifecycle.viewModelScope
 import com.androidengineers.agent_quickstart_android.config.QuickstartConfig
 import com.androidengineers.agent_quickstart_android.data.ConversationRepository
 import com.androidengineers.agent_quickstart_android.model.ConversationUiState
+import com.androidengineers.agent_quickstart_android.model.TranscriptSpeaker
 import com.androidengineers.agent_quickstart_android.rtc.AgoraConversationSessionManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class ConversationViewModel(
@@ -30,7 +32,8 @@ class ConversationViewModel(
         viewModelScope.launch {
             sessionManager.snapshot.collectLatest { snapshot ->
                 _uiState.update { current ->
-                    ConversationUiStateMapper.mergeSession(current, snapshot)
+                    val merged = ConversationUiStateMapper.mergeSession(current, snapshot)
+                    merged.captureCorrectionResponseIfReady()
                 }
             }
         }
@@ -167,6 +170,82 @@ class ConversationViewModel(
         }
     }
 
+    fun endConversationForLifecycle() {
+        val currentState = _uiState.value
+        if (currentState.inConversation || currentState.isAnalyzingCorrection) {
+            endConversation()
+        }
+    }
+
+    fun doneSpeakingForCorrection() {
+        val currentState = _uiState.value
+        if (!currentState.inConversation || currentState.isAnalyzingCorrection) {
+            return
+        }
+
+        val userTranscript = currentState.userTranscriptForCorrection()
+        if (userTranscript.isBlank()) {
+            _uiState.update {
+                it.copy(
+                    errorMessage = "Speak at least one sentence before asking BetterSaid to correct it.",
+                    warningMessage = null,
+                )
+            }
+            return
+        }
+
+        viewModelScope.launch {
+            val requestedAt = System.currentTimeMillis()
+            sessionManager.setMicrophoneEnabled(false)
+            _uiState.update {
+                it.copy(
+                    isAnalyzingCorrection = true,
+                    correctionRequestedAtMillis = requestedAt,
+                    correctionRequestedAgentTurnCount = it.completedAgentTurnCount(),
+                    correctionOriginalText = userTranscript,
+                    correctionResponseText = null,
+                    correctionAgentTurnKey = null,
+                    errorMessage = null,
+                    warningMessage = null,
+                )
+            }
+
+            runCatching {
+                sessionManager.sendTextToAgent(
+                    text = buildCorrectionAnalysisPrompt(userTranscript),
+                    priority = "INTERRUPT",
+                    responseInterruptable = false,
+                )
+            }.onFailure { error ->
+                _uiState.update {
+                    it.copy(
+                        isAnalyzingCorrection = false,
+                        errorMessage = error.message ?: "Unable to ask BetterSaid to analyze your English.",
+                    )
+                }
+            }
+
+            delay(CORRECTION_ANALYSIS_TIMEOUT_MS)
+            _uiState.update {
+                if (it.isAnalyzingCorrection && it.correctionRequestedAtMillis == requestedAt) {
+                    it.copy(
+                        isAnalyzingCorrection = false,
+                        warningMessage = "BetterSaid did not return a correction yet. You can tap Done Speaking again or keep talking to the coach.",
+                    )
+                } else {
+                    it
+                }
+            }
+        }
+    }
+
+    fun askCoachAboutMistakes() {
+        if (!_uiState.value.inConversation) {
+            return
+        }
+        sessionManager.setMicrophoneEnabled(true)
+    }
+
     fun toggleMicrophone() {
         sessionManager.setMicrophoneEnabled(!_uiState.value.micRequestedEnabled)
     }
@@ -183,5 +262,62 @@ class ConversationViewModel(
     override fun onCleared() {
         sessionManager.release()
         super.onCleared()
+    }
+
+    private fun ConversationUiState.userTranscriptForCorrection(): String {
+        val completedTurns = transcriptHistory
+            .filter { it.speaker == TranscriptSpeaker.USER && it.text.isNotBlank() }
+            .joinToString(" ") { it.text.trim() }
+        val liveTurn = liveTranscript
+            ?.takeIf { it.speaker == TranscriptSpeaker.USER && it.text.isNotBlank() }
+            ?.text
+            ?.trim()
+            .orEmpty()
+
+        return listOf(completedTurns, liveTurn)
+            .filter { it.isNotBlank() }
+            .joinToString(" ")
+            .replace(Regex("\\s{2,}"), " ")
+            .trim()
+    }
+
+    private fun ConversationUiState.captureCorrectionResponseIfReady(): ConversationUiState {
+        correctionRequestedAtMillis ?: return this
+        if (correctionResponseText != null) {
+            return this
+        }
+        val correctionTurn = transcriptHistory
+            .filter { it.speaker == TranscriptSpeaker.AGENT && it.text.isNotBlank() }
+            .drop(correctionRequestedAgentTurnCount)
+            .firstOrNull()
+
+        return if (correctionTurn == null) {
+            this
+        } else {
+            copy(
+                isAnalyzingCorrection = false,
+                correctionResponseText = correctionTurn.text,
+                correctionAgentTurnKey = correctionTurn.key,
+            )
+        }
+    }
+
+    private fun buildCorrectionAnalysisPrompt(transcript: String): String {
+        return """
+BETTERSAID_ANALYZE_TRANSCRIPT
+
+Learner transcript:
+$transcript
+        """.trimIndent()
+    }
+
+    private fun ConversationUiState.completedAgentTurnCount(): Int {
+        return transcriptHistory.count {
+            it.speaker == TranscriptSpeaker.AGENT && it.text.isNotBlank()
+        }
+    }
+
+    private companion object {
+        const val CORRECTION_ANALYSIS_TIMEOUT_MS = 20_000L
     }
 }

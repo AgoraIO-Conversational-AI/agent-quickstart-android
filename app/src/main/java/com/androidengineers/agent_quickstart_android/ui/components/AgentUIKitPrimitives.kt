@@ -37,10 +37,12 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.androidengineers.agent_quickstart_android.ui.theme.BetterSaidShapes
+import com.androidengineers.agent_quickstart_android.ui.theme.BetterSaidSpacing
 
 /**
  * A small subset of primitives adapted from the public agent-uikit Android repo
- * for this sample app's screen design.
+ * for BetterSaid's paper-and-ink screen design.
  */
 
 enum class AgentButtonVariant {
@@ -58,27 +60,27 @@ fun AgentCard(
 ) {
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(20.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        shape = RoundedCornerShape(BetterSaidShapes.Md),
+        border = BorderStroke(BetterSaidShapes.InkStroke, MaterialTheme.colorScheme.outlineVariant),
         colors = CardDefaults.cardColors(
-            containerColor = Color.Transparent,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.72f),
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .padding(BetterSaidSpacing.Md),
+            verticalArrangement = Arrangement.spacedBy(BetterSaidSpacing.Sm),
         ) {
             if (title != null || subtitle != null) {
                 Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(BetterSaidShapes.Md),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.45f),
                 ) {
                     Column(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = BetterSaidSpacing.Sm),
+                        verticalArrangement = Arrangement.spacedBy(BetterSaidSpacing.Xs),
                     ) {
                         title?.let {
                             Text(
@@ -116,8 +118,9 @@ fun AgentButton(
                 onClick = onClick,
                 modifier = modifier,
                 enabled = enabled,
-                shape = RoundedCornerShape(16.dp),
-                contentPadding = PaddingValues(horizontal = 18.dp, vertical = 16.dp),
+                shape = RoundedCornerShape(BetterSaidShapes.Md),
+                contentPadding = PaddingValues(horizontal = 18.dp, vertical = BetterSaidSpacing.Md),
+                border = BorderStroke(BetterSaidShapes.InkStroke, MaterialTheme.colorScheme.primary),
             ) {
                 Text(text = text, style = MaterialTheme.typography.labelLarge)
             }
@@ -128,9 +131,9 @@ fun AgentButton(
                 onClick = onClick,
                 modifier = modifier,
                 enabled = enabled,
-                shape = RoundedCornerShape(16.dp),
-                contentPadding = PaddingValues(horizontal = 18.dp, vertical = 16.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                shape = RoundedCornerShape(BetterSaidShapes.Md),
+                contentPadding = PaddingValues(horizontal = 18.dp, vertical = BetterSaidSpacing.Md),
+                border = BorderStroke(BetterSaidShapes.InkStroke, MaterialTheme.colorScheme.outlineVariant),
             ) {
                 Text(text = text, style = MaterialTheme.typography.labelLarge)
             }
@@ -141,8 +144,9 @@ fun AgentButton(
                 onClick = onClick,
                 modifier = modifier,
                 enabled = enabled,
-                shape = RoundedCornerShape(16.dp),
-                contentPadding = PaddingValues(horizontal = 18.dp, vertical = 16.dp),
+                shape = RoundedCornerShape(BetterSaidShapes.Md),
+                contentPadding = PaddingValues(horizontal = 18.dp, vertical = BetterSaidSpacing.Md),
+                border = BorderStroke(BetterSaidShapes.InkStroke, MaterialTheme.colorScheme.error),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.error,
                     contentColor = MaterialTheme.colorScheme.onError,
@@ -183,7 +187,7 @@ fun StatusChip(
             )
         },
         border = BorderStroke(
-            1.dp,
+            BetterSaidShapes.InkStroke,
             MaterialTheme.colorScheme.outlineVariant,
         ),
         colors = FilterChipDefaults.filterChipColors(
@@ -236,10 +240,10 @@ fun AgentIconControlButton(
             Icon(imageVector = icon, contentDescription = contentDescription)
         }
     } else {
-        OutlinedIconButton(
-            onClick = onClick,
-            modifier = modifier.size(56.dp),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            OutlinedIconButton(
+                onClick = onClick,
+                modifier = modifier.size(56.dp),
+            border = BorderStroke(BetterSaidShapes.InkStroke, MaterialTheme.colorScheme.outlineVariant),
         ) {
             Icon(
                 imageVector = icon,
@@ -268,7 +272,7 @@ fun AgentAvatarBadge(
             .clip(CircleShape)
             .background(highlightColor.copy(alpha = 0.12f))
             .border(
-                width = 1.dp,
+                width = BetterSaidShapes.InkStroke,
                 color = MaterialTheme.colorScheme.outlineVariant,
                 shape = CircleShape,
             ),
@@ -291,7 +295,7 @@ fun InfoField(
 ) {
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(BetterSaidShapes.Lg))
             .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.4f))
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -322,7 +326,7 @@ fun LabeledIconText(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(BetterSaidShapes.Lg))
             .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.45f))
             .padding(horizontal = 14.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),

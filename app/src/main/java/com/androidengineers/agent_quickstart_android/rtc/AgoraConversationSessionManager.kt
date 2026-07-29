@@ -19,6 +19,7 @@ import io.agora.rtm.ErrorInfo
 import io.agora.rtm.LinkStateEvent
 import io.agora.rtm.MessageEvent
 import io.agora.rtm.PresenceEvent
+import io.agora.rtm.PublishOptions
 import io.agora.rtm.ResultCallback
 import io.agora.rtm.RtmClient
 import io.agora.rtm.RtmConfig
@@ -79,6 +80,8 @@ class AgoraConversationSessionManager(
     private var currentAgentTurnId: Long? = null
     private var interruptRequestedTurnId: Long? = null
     private var lastInterruptRequestAtMs: Long = 0L
+    private var agentReadyForUserAudio: Boolean = false
+    private var observedAgentRtmUserId: String? = null
 
     init {
         scope.launch {
@@ -108,8 +111,10 @@ class AgoraConversationSessionManager(
         renewTokensProvider = onRenewTokens
         transcriptAssembler.reset()
         micRequestedEnabled = true
+        agentReadyForUserAudio = false
         activeAgentId = null
         currentRtmUserId = bootstrap.rtmUserId
+        observedAgentRtmUserId = null
         currentAgentTurnId = null
         interruptRequestedTurnId = null
         lastInterruptRequestAtMs = 0L
@@ -117,7 +122,7 @@ class AgoraConversationSessionManager(
             channelName = bootstrap.channel,
             micEnabled = currentMicEnabled(),
             micRequestedEnabled = micRequestedEnabled,
-            micAutoMuted = false,
+            micAutoMuted = micRequestedEnabled && !currentMicEnabled(),
         )
 
         try {
@@ -129,7 +134,7 @@ class AgoraConversationSessionManager(
             )
             joinRtcChannel(bootstrap)
             audioSessionManager.start()
-            audioSessionManager.setMicrophoneEnabled(micRequestedEnabled)
+            audioSessionManager.setMicrophoneEnabled(currentMicEnabled())
         } catch (error: Throwable) {
             disconnect(resetSnapshot = true)
             throw error
@@ -143,8 +148,10 @@ class AgoraConversationSessionManager(
         renewTokensProvider = null
         localRtcUid = 0
         micRequestedEnabled = true
+        agentReadyForUserAudio = false
         activeAgentId = null
         currentRtmUserId = null
+        observedAgentRtmUserId = null
         currentAgentTurnId = null
         interruptRequestedTurnId = null
         lastInterruptRequestAtMs = 0L
@@ -183,12 +190,34 @@ class AgoraConversationSessionManager(
 
     fun setMicrophoneEnabled(enabled: Boolean) {
         micRequestedEnabled = enabled
-        audioSessionManager.setMicrophoneEnabled(enabled)
+        audioSessionManager.setMicrophoneEnabled(currentMicEnabled())
         syncMicState()
     }
 
     fun setActiveAgentId(agentId: String?) {
         activeAgentId = agentId
+    }
+
+    suspend fun sendTextToAgent(
+        text: String,
+        priority: String = "INTERRUPT",
+        responseInterruptable: Boolean = true,
+    ) {
+        val client = rtmClient ?: throw IOException("RTM client is not connected.")
+        val agentUserId = observedAgentRtmUserId ?: QuickstartConfig.agentUid.toString()
+        val payload = JSONObject()
+            .put("priority", priority)
+            .put("interruptable", responseInterruptable)
+            .put("message", text)
+            .toString()
+        val options = PublishOptions().apply {
+            setChannelType(RtmConstants.RtmChannelType.USER)
+            customType = "user.transcription"
+        }
+
+        awaitRtmVoid { callback ->
+            client.publish(agentUserId, payload, options, callback)
+        }
     }
 
     private suspend fun ensureRtcEngine() = withContext(Dispatchers.Main.immediate) {
@@ -370,17 +399,19 @@ class AgoraConversationSessionManager(
 
         when (mappedState) {
             AgentConversationState.SPEAKING -> {
+                agentReadyForUserAudio = true
                 currentAgentTurnId = turnId
-                audioSessionManager.setMicrophoneEnabled(micRequestedEnabled)
-                Log.i(TAG, "Agent speaking with microphone kept ${if (micRequestedEnabled) "enabled" else "muted"} for barge-in")
+                audioSessionManager.setMicrophoneEnabled(currentMicEnabled())
+                Log.i(TAG, "Agent speaking with microphone kept ${if (currentMicEnabled()) "enabled" else "muted"} for barge-in")
             }
 
             AgentConversationState.LISTENING,
             AgentConversationState.IDLE,
             AgentConversationState.SILENT -> {
+                agentReadyForUserAudio = true
                 currentAgentTurnId = null
                 interruptRequestedTurnId = null
-                audioSessionManager.setMicrophoneEnabled(micRequestedEnabled)
+                audioSessionManager.setMicrophoneEnabled(currentMicEnabled())
                 Log.i(TAG, "Agent ready; microphone restored to requested state")
             }
 
@@ -388,7 +419,12 @@ class AgoraConversationSessionManager(
         }
 
         updateSnapshot { current ->
-            current.copy(agentState = mappedState)
+            current.copy(
+                agentState = mappedState,
+                micEnabled = currentMicEnabled(),
+                micRequestedEnabled = micRequestedEnabled,
+                micAutoMuted = micRequestedEnabled && !currentMicEnabled(),
+            )
         }
         if (mappedState == AgentConversationState.UNKNOWN) {
             addIssue(
@@ -434,7 +470,7 @@ class AgoraConversationSessionManager(
     }
 
     private fun currentMicEnabled(): Boolean {
-        return micRequestedEnabled
+        return micRequestedEnabled && agentReadyForUserAudio
     }
 
     private fun syncMicState() {
@@ -442,7 +478,7 @@ class AgoraConversationSessionManager(
             it.copy(
                 micEnabled = currentMicEnabled(),
                 micRequestedEnabled = micRequestedEnabled,
-                micAutoMuted = false,
+                micAutoMuted = micRequestedEnabled && !currentMicEnabled(),
             )
         }
     }
@@ -455,9 +491,20 @@ class AgoraConversationSessionManager(
         } ?: return
 
         val payload = runCatching { JSONObject(rawPayload) }.getOrNull() ?: return
-        when (payload.optString("object")) {
+        val objectType = payload.optString("object")
+        if (objectType != "user.transcription") {
+            observedAgentRtmUserId = event.getPublisherId()
+                .takeIf { it.isNotBlank() }
+                ?: observedAgentRtmUserId
+        }
+
+        when (objectType) {
             "user.transcription" -> {
                 val text = payload.optString("text")
+                if (!micRequestedEnabled) {
+                    Log.i(TAG, "Ignored user transcription while microphone is intentionally muted.")
+                    return
+                }
                 val agentSpeaking = _snapshot.value.agentState == AgentConversationState.SPEAKING
 
                 if (audioSessionManager.shouldAcceptUserTranscript(text)) {
@@ -645,13 +692,31 @@ class AgoraConversationSessionManager(
 
         override fun onUserJoined(uid: Int, elapsed: Int) {
             if (uid == QuickstartConfig.agentUid) {
-                updateSnapshot { it.copy(isAgentRtcConnected = true) }
+                agentReadyForUserAudio = true
+                audioSessionManager.setMicrophoneEnabled(currentMicEnabled())
+                updateSnapshot {
+                    it.copy(
+                        isAgentRtcConnected = true,
+                        micEnabled = currentMicEnabled(),
+                        micRequestedEnabled = micRequestedEnabled,
+                        micAutoMuted = micRequestedEnabled && !currentMicEnabled(),
+                    )
+                }
             }
         }
 
         override fun onUserOffline(uid: Int, reason: Int) {
             if (uid == QuickstartConfig.agentUid) {
-                updateSnapshot { it.copy(isAgentRtcConnected = false) }
+                agentReadyForUserAudio = false
+                audioSessionManager.setMicrophoneEnabled(false)
+                updateSnapshot {
+                    it.copy(
+                        isAgentRtcConnected = false,
+                        micEnabled = currentMicEnabled(),
+                        micRequestedEnabled = micRequestedEnabled,
+                        micAutoMuted = micRequestedEnabled && !currentMicEnabled(),
+                    )
+                }
             }
         }
 

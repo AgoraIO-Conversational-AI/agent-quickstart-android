@@ -70,11 +70,27 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                     onEndConversation = viewModel::endConversation,
+                    onDoneSpeaking = viewModel::doneSpeakingForCorrection,
+                    onAskCoach = viewModel::askCoachAboutMistakes,
                     onToggleMicrophone = viewModel::toggleMicrophone,
                     onToggleTheme = viewModel::toggleTheme,
                     onDismissMessages = viewModel::clearTransientMessages,
                 )
             }
         }
+    }
+
+    override fun onStop() {
+        if (!isChangingConfigurations) {
+            viewModel.endConversationForLifecycle()
+        }
+        super.onStop()
+    }
+
+    override fun onDestroy() {
+        if (!isChangingConfigurations) {
+            viewModel.endConversationForLifecycle()
+        }
+        super.onDestroy()
     }
 }
