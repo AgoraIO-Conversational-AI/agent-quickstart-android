@@ -2,6 +2,7 @@ package com.androidengineers.agent_quickstart_android.data
 
 import com.androidengineers.agent_quickstart_android.model.AgentInviteResult
 import com.androidengineers.agent_quickstart_android.model.AgoraTokenBundle
+import com.androidengineers.agent_quickstart_android.model.PracticeMode
 import com.androidengineers.agent_quickstart_android.model.RenewalTokens
 
 class ConversationRepository(
@@ -14,10 +15,12 @@ class ConversationRepository(
     suspend fun inviteAgent(
         channelName: String,
         requesterRtcUid: String,
+        practiceMode: PracticeMode,
     ): AgentInviteResult {
         return api.inviteAgent(
             channelName = channelName,
             requesterRtcUid = requesterRtcUid,
+            practiceMode = practiceMode,
         )
     }
 

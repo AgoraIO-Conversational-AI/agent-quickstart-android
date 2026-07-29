@@ -5,15 +5,16 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.androidengineers.agent_quickstart_android.config.QuickstartConfig
 import com.androidengineers.agent_quickstart_android.data.ConversationRepository
+import com.androidengineers.agent_quickstart_android.domain.conversation.CorrectionAnalysisUseCases
 import com.androidengineers.agent_quickstart_android.model.ConversationUiState
-import com.androidengineers.agent_quickstart_android.model.TranscriptSpeaker
+import com.androidengineers.agent_quickstart_android.model.PracticeMode
 import com.androidengineers.agent_quickstart_android.rtc.AgoraConversationSessionManager
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class ConversationViewModel(
@@ -21,6 +22,7 @@ class ConversationViewModel(
 ) : AndroidViewModel(application) {
     private val repository = ConversationRepository()
     private val sessionManager = AgoraConversationSessionManager(application)
+    private val correctionAnalysis = CorrectionAnalysisUseCases()
     private val _uiState = MutableStateFlow(ConversationUiStateMapper.freshUiState())
 
     val uiState: StateFlow<ConversationUiState> = _uiState.asStateFlow()
@@ -33,7 +35,7 @@ class ConversationViewModel(
             sessionManager.snapshot.collectLatest { snapshot ->
                 _uiState.update { current ->
                     val merged = ConversationUiStateMapper.mergeSession(current, snapshot)
-                    merged.captureCorrectionResponseIfReady()
+                    correctionAnalysis.captureCorrectionResponseIfReady(merged)
                 }
             }
         }
@@ -54,6 +56,10 @@ class ConversationViewModel(
     fun toggleTheme() {
         themeInitialized = true
         _uiState.update { it.copy(isDarkTheme = !it.isDarkTheme) }
+    }
+
+    fun selectPracticeMode(mode: PracticeMode) {
+        _uiState.update { it.copy(practiceMode = mode) }
     }
 
     fun startConversation() {
@@ -106,6 +112,7 @@ class ConversationViewModel(
                     repository.inviteAgent(
                         channelName = bootstrap.channel,
                         requesterRtcUid = requesterRtcUid,
+                        practiceMode = _uiState.value.practiceMode,
                     )
                 }.getOrNull()
                 activeAgentId = inviteResult?.agentId
@@ -183,7 +190,7 @@ class ConversationViewModel(
             return
         }
 
-        val userTranscript = currentState.userTranscriptForCorrection()
+        val userTranscript = correctionAnalysis.userTranscriptForCorrection(currentState)
         if (userTranscript.isBlank()) {
             _uiState.update {
                 it.copy(
@@ -201,7 +208,7 @@ class ConversationViewModel(
                 it.copy(
                     isAnalyzingCorrection = true,
                     correctionRequestedAtMillis = requestedAt,
-                    correctionRequestedAgentTurnCount = it.completedAgentTurnCount(),
+                    correctionRequestedAgentTurnCount = correctionAnalysis.completedAgentTurnCount(it),
                     correctionOriginalText = userTranscript,
                     correctionResponseText = null,
                     correctionAgentTurnKey = null,
@@ -212,7 +219,7 @@ class ConversationViewModel(
 
             runCatching {
                 sessionManager.sendTextToAgent(
-                    text = buildCorrectionAnalysisPrompt(userTranscript),
+                    text = correctionAnalysis.buildAnalysisPrompt(userTranscript),
                     priority = "INTERRUPT",
                     responseInterruptable = false,
                 )
@@ -220,6 +227,11 @@ class ConversationViewModel(
                 _uiState.update {
                     it.copy(
                         isAnalyzingCorrection = false,
+                        correctionRequestedAtMillis = null,
+                        correctionRequestedAgentTurnCount = 0,
+                        correctionOriginalText = null,
+                        correctionResponseText = null,
+                        correctionAgentTurnKey = null,
                         errorMessage = error.message ?: "Unable to ask BetterSaid to analyze your English.",
                     )
                 }
@@ -262,59 +274,6 @@ class ConversationViewModel(
     override fun onCleared() {
         sessionManager.release()
         super.onCleared()
-    }
-
-    private fun ConversationUiState.userTranscriptForCorrection(): String {
-        val completedTurns = transcriptHistory
-            .filter { it.speaker == TranscriptSpeaker.USER && it.text.isNotBlank() }
-            .joinToString(" ") { it.text.trim() }
-        val liveTurn = liveTranscript
-            ?.takeIf { it.speaker == TranscriptSpeaker.USER && it.text.isNotBlank() }
-            ?.text
-            ?.trim()
-            .orEmpty()
-
-        return listOf(completedTurns, liveTurn)
-            .filter { it.isNotBlank() }
-            .joinToString(" ")
-            .replace(Regex("\\s{2,}"), " ")
-            .trim()
-    }
-
-    private fun ConversationUiState.captureCorrectionResponseIfReady(): ConversationUiState {
-        correctionRequestedAtMillis ?: return this
-        if (correctionResponseText != null) {
-            return this
-        }
-        val correctionTurn = transcriptHistory
-            .filter { it.speaker == TranscriptSpeaker.AGENT && it.text.isNotBlank() }
-            .drop(correctionRequestedAgentTurnCount)
-            .firstOrNull()
-
-        return if (correctionTurn == null) {
-            this
-        } else {
-            copy(
-                isAnalyzingCorrection = false,
-                correctionResponseText = correctionTurn.text,
-                correctionAgentTurnKey = correctionTurn.key,
-            )
-        }
-    }
-
-    private fun buildCorrectionAnalysisPrompt(transcript: String): String {
-        return """
-BETTERSAID_ANALYZE_TRANSCRIPT
-
-Learner transcript:
-$transcript
-        """.trimIndent()
-    }
-
-    private fun ConversationUiState.completedAgentTurnCount(): Int {
-        return transcriptHistory.count {
-            it.speaker == TranscriptSpeaker.AGENT && it.text.isNotBlank()
-        }
     }
 
     private companion object {

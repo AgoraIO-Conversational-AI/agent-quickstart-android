@@ -54,9 +54,9 @@ class AudioSessionManager(
         selfSpeechFilter.clear()
         turnManager.reset()
         previousAudioMode = audioManager.mode
-        previousSpeakerphoneState = audioManager.isSpeakerphoneOn
+        previousSpeakerphoneState = audioManager.currentSpeakerphoneState()
         audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
-        audioManager.isSpeakerphoneOn = true
+        audioManager.setLegacySpeakerphoneState(true)
         updateNativeTrackDiagnostics(
             nativeMicTrackActive = true,
             customAudioTrackActive = false,
@@ -175,7 +175,7 @@ class AudioSessionManager(
 
     private fun restoreAudioRoute() {
         audioManager.mode = previousAudioMode
-        audioManager.isSpeakerphoneOn = previousSpeakerphoneState
+        audioManager.setLegacySpeakerphoneState(previousSpeakerphoneState)
     }
 
     private fun updateNativeTrackDiagnostics(
@@ -207,4 +207,12 @@ class AudioSessionManager(
     companion object {
         private const val TAG = "AudioSessionManager"
     }
+}
+
+@Suppress("DEPRECATION")
+private fun AudioManager.currentSpeakerphoneState(): Boolean = isSpeakerphoneOn
+
+@Suppress("DEPRECATION")
+private fun AudioManager.setLegacySpeakerphoneState(enabled: Boolean) {
+    isSpeakerphoneOn = enabled
 }

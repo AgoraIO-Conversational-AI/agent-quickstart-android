@@ -3,6 +3,7 @@ package com.androidengineers.agent_quickstart_android.data
 import com.androidengineers.agent_quickstart_android.config.QuickstartConfig
 import com.androidengineers.agent_quickstart_android.model.AgentInviteResult
 import com.androidengineers.agent_quickstart_android.model.AgoraTokenBundle
+import com.androidengineers.agent_quickstart_android.model.PracticeMode
 import com.androidengineers.agent_quickstart_android.model.RenewalTokens
 import com.google.gson.annotations.SerializedName
 import java.io.IOException
@@ -56,84 +57,111 @@ class ConversationAgoraApi(
     suspend fun inviteAgent(
         channelName: String,
         requesterRtcUid: String,
+        practiceMode: PracticeMode = PracticeMode.DAILY_LIFE,
     ): AgentInviteResult {
         val agentToken = tokenFactory.buildAgentRestToken(channelName)
         val providerConfig = buildProviderConfig()
-        val body = service.inviteAgent(
-            appId = appId,
-            authorization = authorizationHeader(agentToken),
-            request = JoinAgentRequest(
-                name = generateAgentName(),
-                preset = providerConfig.preset,
-                properties = JoinAgentProperties(
-                    channel = channelName,
-                    token = agentToken,
-                    agentRtcUid = QuickstartConfig.agentUid.toString(),
-                    remoteRtcUids = listOf(requesterRtcUid),
-                    enableStringUid = false,
-                    idleTimeout = 30,
-                    geofence = JoinGeofence(
-                        area = mapGeofenceArea(QuickstartConfig.agoraArea),
-                    ),
-                    advancedFeatures = JoinAdvancedFeatures(
-                        enableRtm = true,
-                    ),
-                    asr = providerConfig.asr,
-                    llm = JoinLlm(
-                        systemMessages = listOf(
-                            JoinSystemMessage(
-                                role = "system",
-                                content = BETTERSAID_PROMPT,
-                            )
-                        ),
-                        maxHistory = 15,
-                        greetingMessage = DEFAULT_GREETING,
-                        failureMessage = DEFAULT_FAILURE_MESSAGE,
-                        params = JoinLlmParams(
-                            maxTokens = 1024,
-                            temperature = 0.7,
-                            topP = 0.95,
-                        ),
-                    ),
-                    tts = providerConfig.tts,
-                    turnDetection = JoinTurnDetection(
-                        mode = "default",
-                        config = JoinTurnDetectionConfig(
-                            speechThreshold = 0.38,
-                            startOfSpeech = JoinStartOfSpeech(
-                                mode = "vad",
-                                vadConfig = JoinStartVadConfig(
-                                    interruptDurationMs = 160,
-                                    speakingInterruptDurationMs = 160,
-                                    prefixPaddingMs = 480,
-                                ),
-                            ),
-                            endOfSpeech = JoinEndOfSpeech(
-                                mode = "vad",
-                                vadConfig = JoinEndVadConfig(
-                                    silenceDurationMs = 720,
-                                ),
-                            ),
-                        ),
-                    ),
-                    interruption = JoinInterruption(
-                        enable = true,
-                        mode = "start_of_speech",
-                    ),
-                    parameters = JoinParameters(
-                        audioScenario = "chorus",
-                        dataChannel = "rtm",
-                        enableErrorMessage = true,
-                        enableMetrics = true,
-                    ),
+        repeat(AGENT_NAME_ATTEMPTS) { attempt ->
+            val response = service.inviteAgent(
+                appId = appId,
+                authorization = authorizationHeader(agentToken),
+                request = buildJoinAgentRequest(
+                    name = generateAgentName(),
+                    channelName = channelName,
+                    requesterRtcUid = requesterRtcUid,
+                    agentToken = agentToken,
+                    providerConfig = providerConfig,
+                    practiceMode = practiceMode,
                 ),
             )
-        ).requireBody()
+            if (response.code() == HTTP_CONFLICT && attempt < AGENT_NAME_ATTEMPTS - 1) {
+                return@repeat
+            }
 
-        return AgentInviteResult(
-            agentId = body.agentId.requireValue("agent_id"),
-            createTimestampSeconds = body.createTimestampSeconds,
-            state = body.status?.takeIf { it.isNotBlank() },
+            val body = response.requireBody()
+            return AgentInviteResult(
+                agentId = body.agentId.requireValue("agent_id"),
+                createTimestampSeconds = body.createTimestampSeconds,
+                state = body.status?.takeIf { it.isNotBlank() },
+            )
+        }
+
+        throw IOException("Agora REST request failed after retrying agent name generation.")
+    }
+
+    private fun buildJoinAgentRequest(
+        name: String,
+        channelName: String,
+        requesterRtcUid: String,
+        agentToken: String,
+        providerConfig: JoinProviderConfig,
+        practiceMode: PracticeMode,
+    ): JoinAgentRequest {
+        return JoinAgentRequest(
+            name = name,
+            preset = providerConfig.preset,
+            properties = JoinAgentProperties(
+                channel = channelName,
+                token = agentToken,
+                agentRtcUid = QuickstartConfig.agentUid.toString(),
+                remoteRtcUids = listOf(requesterRtcUid),
+                enableStringUid = false,
+                idleTimeout = 30,
+                geofence = JoinGeofence(
+                    area = mapGeofenceArea(QuickstartConfig.agoraArea),
+                ),
+                advancedFeatures = JoinAdvancedFeatures(
+                    enableRtm = true,
+                ),
+                asr = providerConfig.asr,
+                llm = JoinLlm(
+                    systemMessages = listOf(
+                        JoinSystemMessage(
+                            role = "system",
+                            content = buildBetterSaidPrompt(practiceMode),
+                        )
+                    ),
+                    maxHistory = 15,
+                    greetingMessage = DEFAULT_GREETING,
+                    failureMessage = DEFAULT_FAILURE_MESSAGE,
+                    params = JoinLlmParams(
+                        maxTokens = 1024,
+                        temperature = 0.7,
+                        topP = 0.95,
+                    ),
+                ),
+                tts = providerConfig.tts,
+                turnDetection = JoinTurnDetection(
+                    mode = "default",
+                    config = JoinTurnDetectionConfig(
+                        speechThreshold = 0.38,
+                        startOfSpeech = JoinStartOfSpeech(
+                            mode = "vad",
+                            vadConfig = JoinStartVadConfig(
+                                interruptDurationMs = 160,
+                                speakingInterruptDurationMs = 160,
+                                prefixPaddingMs = 480,
+                            ),
+                        ),
+                        endOfSpeech = JoinEndOfSpeech(
+                            mode = "vad",
+                            vadConfig = JoinEndVadConfig(
+                                silenceDurationMs = 720,
+                            ),
+                        ),
+                    ),
+                ),
+                interruption = JoinInterruption(
+                    enable = true,
+                    mode = "start_of_speech",
+                ),
+                parameters = JoinParameters(
+                    audioScenario = "chorus",
+                    dataChannel = "rtm",
+                    enableErrorMessage = true,
+                    enableMetrics = true,
+                ),
+            ),
         )
     }
 
@@ -213,7 +241,8 @@ class ConversationAgoraApi(
 
     private fun Response<*>.toIOException(): IOException {
         val payload = errorBody()?.string().orEmpty()
-        val json = payload.takeIf { it.isNotBlank() }?.let(::JSONObject)
+        val json = payload.takeIf { it.isNotBlank() }
+            ?.let { runCatching { JSONObject(it) }.getOrNull() }
         val detail = json?.optString("detail").orEmpty()
         val reason = json?.optString("reason").orEmpty()
         val message = reason.ifBlank { "Agora REST request failed with status ${code()}." }
@@ -401,12 +430,23 @@ class ConversationAgoraApi(
 
     private companion object {
         const val NETWORK_TIMEOUT_SECONDS = 15L
+        const val AGENT_NAME_ATTEMPTS = 2
+        const val HTTP_CONFLICT = 409
         const val DEFAULT_PRESET =
             "deepgram_nova_3,openai_gpt_4o_mini,minimax_speech_2_6_turbo"
         const val DEFAULT_TTS_VOICE_ID = "English_captivating_female1"
         const val DEFAULT_GREETING =
             "Hi, I am listening. Speak freely, then tap Done Speaking."
         const val DEFAULT_FAILURE_MESSAGE = "Please wait a moment while I shape that sentence."
+
+        fun buildBetterSaidPrompt(practiceMode: PracticeMode): String {
+            return """
+${BETTERSAID_PROMPT.trim()}
+
+Current practice mode: ${practiceMode.label}
+Mode guidance: ${practiceMode.promptFocus}
+""".trim()
+        }
 
         const val BETTERSAID_PROMPT = """
 You are BetterSaid, a gentle spoken-English coach.

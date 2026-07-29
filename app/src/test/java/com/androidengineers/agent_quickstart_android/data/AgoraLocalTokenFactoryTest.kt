@@ -36,6 +36,23 @@ class AgoraLocalTokenFactoryTest {
     }
 
     @Test
+    fun createBootstrapDefaultsRtmUserIdToRtcUidString() {
+        assumeTrue(com.androidengineers.agent_quickstart_android.config.QuickstartConfig.isConfigured)
+        val factory = AgoraLocalTokenFactory(
+            appId = com.androidengineers.agent_quickstart_android.config.QuickstartConfig.agoraAppId,
+            appCertificate = com.androidengineers.agent_quickstart_android.config.QuickstartConfig.agoraAppCertificate,
+            agentUid = 2468,
+        )
+
+        val bootstrap = factory.createBootstrap(
+            channelName = "room-a",
+            rtcUid = 42,
+        )
+
+        assertEquals("42", bootstrap.rtmUserId)
+    }
+
+    @Test
     fun renewUserTokensBuildsBothRtcAndRtmTokens() {
         assumeTrue(com.androidengineers.agent_quickstart_android.config.QuickstartConfig.isConfigured)
         val factory = AgoraLocalTokenFactory(

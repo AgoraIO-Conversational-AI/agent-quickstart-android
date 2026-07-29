@@ -19,7 +19,7 @@ class AgoraLocalTokenFactory(
     ): AgoraTokenBundle {
         val resolvedUid = rtcUid ?: generateNumericUid()
         val resolvedChannel = channelName?.takeIf { it.isNotBlank() } ?: generateChannelName()
-        val resolvedRtmUserId = rtmUserId?.takeIf { it.isNotBlank() } ?: "android-$resolvedUid"
+        val resolvedRtmUserId = rtmUserId?.takeIf { it.isNotBlank() } ?: resolvedUid.toString()
 
         return AgoraTokenBundle(
             rtcToken = buildRtcClientToken(

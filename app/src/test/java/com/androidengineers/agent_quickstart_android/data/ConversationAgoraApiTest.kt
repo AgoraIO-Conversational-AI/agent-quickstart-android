@@ -1,6 +1,7 @@
 package com.androidengineers.agent_quickstart_android.data
 
 import com.androidengineers.agent_quickstart_android.config.QuickstartConfig
+import com.androidengineers.agent_quickstart_android.model.PracticeMode
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.json.JSONObject
@@ -62,15 +63,21 @@ class ConversationAgoraApiTest {
         val result = api.inviteAgent(
             channelName = "room-a",
             requesterRtcUid = "2468",
+            practiceMode = PracticeMode.INTERVIEW,
         )
         val request = server.takeRequest()
         val body = JSONObject(request.body.readUtf8())
         val properties = body.getJSONObject("properties")
+        val systemPrompt = properties
+            .getJSONObject("llm")
+            .getJSONArray("system_messages")
+            .getJSONObject(0)
+            .getString("content")
 
         assertEquals("agent-123", result.agentId)
         assertEquals("/${QuickstartConfig.agoraAppId}/join", request.path)
         assertEquals("POST", request.method)
-        assertTrue(request.getHeader("Authorization")!!.startsWith("agora token="))
+        assertTrue(requireNotNull(request.getHeader("Authorization")).startsWith("agora token="))
         assertTrue(body.getString("name").startsWith("android-rest-agent-"))
         assertEquals("deepgram_nova_3,openai_gpt_4o_mini,minimax_speech_2_6_turbo", body.getString("preset"))
         assertEquals("room-a", properties.getString("channel"))
@@ -83,8 +90,16 @@ class ConversationAgoraApiTest {
         assertEquals("deepgram", properties.getJSONObject("asr").getString("vendor"))
         assertEquals("en", properties.getJSONObject("asr").getJSONObject("params").getString("language"))
         assertEquals(15, properties.getJSONObject("llm").getInt("max_history"))
-        assertEquals("Hi there!", properties.getJSONObject("llm").getString("greeting_message"))
-        assertEquals("Please wait a moment.", properties.getJSONObject("llm").getString("failure_message"))
+        assertTrue(systemPrompt.contains("Current practice mode: Interview"))
+        assertTrue(systemPrompt.contains("job interviews"))
+        assertEquals(
+            "Hi, I am listening. Speak freely, then tap Done Speaking.",
+            properties.getJSONObject("llm").getString("greeting_message"),
+        )
+        assertEquals(
+            "Please wait a moment while I shape that sentence.",
+            properties.getJSONObject("llm").getString("failure_message"),
+        )
         assertEquals("minimax", properties.getJSONObject("tts").getString("vendor"))
         assertEquals("English_captivating_female1", properties.getJSONObject("tts").getJSONObject("params").getJSONObject("voice_setting").getString("voice_id"))
         assertEquals("default", properties.getJSONObject("turn_detection").getString("mode"))
@@ -97,6 +112,50 @@ class ConversationAgoraApiTest {
         assertEquals("rtm", parameters.getString("data_channel"))
         assertTrue(parameters.getBoolean("enable_error_message"))
         assertTrue(parameters.getBoolean("enable_metrics"))
+    }
+
+    @Test
+    fun inviteAgentRetriesWithANewNameOnConflict() = runBlocking {
+        assumeTrue(QuickstartConfig.isConfigured)
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(409)
+                .setBody("""{"reason":"agent name already exists"}""")
+        )
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setBody(
+                    """
+                    {
+                      "agent_id": "agent-456",
+                      "create_ts": 1714310401,
+                      "status": "STARTING"
+                    }
+                    """.trimIndent()
+                )
+        )
+
+        val api = ConversationAgoraApi(
+            appId = QuickstartConfig.agoraAppId,
+            tokenFactory = AgoraLocalTokenFactory(
+                appId = QuickstartConfig.agoraAppId,
+                appCertificate = QuickstartConfig.agoraAppCertificate,
+                agentUid = 1357,
+            ),
+            baseUrl = server.url("/").toString(),
+        )
+
+        val result = api.inviteAgent(
+            channelName = "room-a",
+            requesterRtcUid = "2468",
+            practiceMode = PracticeMode.DAILY_LIFE,
+        )
+        val firstRequest = JSONObject(server.takeRequest().body.readUtf8())
+        val secondRequest = JSONObject(server.takeRequest().body.readUtf8())
+
+        assertEquals("agent-456", result.agentId)
+        assertFalse(firstRequest.getString("name") == secondRequest.getString("name"))
     }
 
     @Test
@@ -119,7 +178,7 @@ class ConversationAgoraApiTest {
 
         assertEquals("/${QuickstartConfig.agoraAppId}/agents/agent-9/leave", request.path)
         assertEquals("POST", request.method)
-        assertTrue(request.getHeader("Authorization")!!.startsWith("agora token="))
+        assertTrue(requireNotNull(request.getHeader("Authorization")).startsWith("agora token="))
         assertEquals("", request.body.readUtf8())
     }
 
@@ -143,7 +202,7 @@ class ConversationAgoraApiTest {
 
         assertEquals("/${QuickstartConfig.agoraAppId}/agents/agent-7/interrupt", request.path)
         assertEquals("POST", request.method)
-        assertTrue(request.getHeader("Authorization")!!.startsWith("agora token="))
+        assertTrue(requireNotNull(request.getHeader("Authorization")).startsWith("agora token="))
         assertEquals("{}", request.body.readUtf8())
     }
 

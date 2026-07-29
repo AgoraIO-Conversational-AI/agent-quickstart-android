@@ -32,6 +32,28 @@ enum class AgentVisualState {
     DISCONNECTED,
 }
 
+enum class PracticeMode(
+    val label: String,
+    val promptFocus: String,
+) {
+    DAILY_LIFE(
+        label = "Daily Life",
+        promptFocus = "Focus examples and tips on everyday conversation, casual errands, family, friends, food, routines, and simple natural small talk.",
+    ),
+    INTERVIEW(
+        label = "Interview",
+        promptFocus = "Focus examples and tips on job interviews, clear professional answers, confidence, concise phrasing, and polite workplace English.",
+    ),
+    TRAVEL(
+        label = "Travel",
+        promptFocus = "Focus examples and tips on travel situations like airports, hotels, directions, restaurants, transport, and asking for help politely.",
+    ),
+    SCHOOL(
+        label = "School",
+        promptFocus = "Focus examples and tips on classroom English, homework, teachers, classmates, explaining ideas, and asking academic questions clearly.",
+    ),
+}
+
 data class TranscriptTurn(
     val key: String,
     val turnId: Long,
@@ -111,6 +133,7 @@ data class ConversationUiState(
     val micEnabled: Boolean = true,
     val micRequestedEnabled: Boolean = true,
     val micAutoMuted: Boolean = false,
+    val practiceMode: PracticeMode = PracticeMode.DAILY_LIFE,
     val transcriptHistory: List<TranscriptTurn> = emptyList(),
     val liveTranscript: TranscriptTurn? = null,
     val isAnalyzingCorrection: Boolean = false,

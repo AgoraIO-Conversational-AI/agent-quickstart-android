@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -55,6 +56,10 @@ class MainActivity : ComponentActivity() {
                     currentViewModel.updateMicrophonePermission(granted)
                 }
 
+                BackHandler(enabled = uiState.inConversation) {
+                    currentViewModel.endConversation()
+                }
+
                 ConversationScreen(
                     uiState = uiState,
                     onStartRequested = {
@@ -74,6 +79,7 @@ class MainActivity : ComponentActivity() {
                     onAskCoach = viewModel::askCoachAboutMistakes,
                     onToggleMicrophone = viewModel::toggleMicrophone,
                     onToggleTheme = viewModel::toggleTheme,
+                    onPracticeModeSelected = viewModel::selectPracticeMode,
                     onDismissMessages = viewModel::clearTransientMessages,
                 )
             }
