@@ -1,8 +1,9 @@
 package com.androidengineers.agent_quickstart_android.ui
 
-import android.content.res.Configuration
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.LocalIndication
@@ -30,7 +31,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -39,17 +39,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.EditNote
-import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.LightMode
-import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.Stop
-import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -57,14 +52,18 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -72,11 +71,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.androidengineers.agent_quickstart_android.model.ConversationUiState
 import com.androidengineers.agent_quickstart_android.model.PracticeMode
-import com.androidengineers.agent_quickstart_android.ui.components.AgentButton
-import com.androidengineers.agent_quickstart_android.ui.components.AgentCard
 import com.androidengineers.agent_quickstart_android.ui.components.AgentIconControlButton
-import com.androidengineers.agent_quickstart_android.ui.components.LabeledIconText
-import com.androidengineers.agent_quickstart_android.ui.components.StatusChip
 import com.androidengineers.agent_quickstart_android.ui.theme.BetterSaidCoral
 import com.androidengineers.agent_quickstart_android.ui.theme.BetterSaidCoralSoft
 import com.androidengineers.agent_quickstart_android.ui.theme.BetterSaidSentenceStyle
@@ -139,7 +134,7 @@ internal fun BetterSaidTopBar(
                         modifier = Modifier.align(Alignment.CenterEnd),
                         onClick = onClose,
                     )
-                } else if (!focused) {
+                } else {
                     AgentIconControlButton(
                         icon = if (isDarkTheme) Icons.Outlined.LightMode else Icons.Outlined.AccountCircle,
                         contentDescription = if (isDarkTheme) "Switch to light theme" else "Switch to dark theme",
@@ -177,7 +172,7 @@ internal fun HomeSpeakScreen(
             contentPadding = PaddingValues(top = BetterSaidSpacing.Xs, bottom = 132.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            item {
+            item(key = "tagline") {
                 Text(
                     text = "Say anything. Watch it become better English.",
                     modifier = Modifier
@@ -195,7 +190,7 @@ internal fun HomeSpeakScreen(
                 onDismissMessages = onDismissMessages,
             )
 
-            item {
+            item(key = "mode-chips") {
                 BetterSaidModeChips(
                     selectedMode = uiState.practiceMode,
                     onModeSelected = onPracticeModeSelected,
@@ -203,14 +198,14 @@ internal fun HomeSpeakScreen(
                 )
             }
 
-            item {
+            item(key = "mirror") {
                 BetterSaidMirror(
                     mirrorSize = mirrorSize,
                     modifier = Modifier.padding(top = itemSpacing),
                 )
             }
 
-            item {
+            item(key = "speak-control") {
                 BetterSaidSpeakControl(
                     uiState = uiState,
                     onStartRequested = onStartRequested,
@@ -235,13 +230,11 @@ private fun BetterSaidModeChips(
         PracticeMode.entries.forEach { mode ->
             val selected = mode == selectedMode
             Surface(
+                onClick = { onModeSelected(mode) },
                 shape = CircleShape,
                 color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.background,
                 border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary),
-                modifier = Modifier
-                    .height(34.dp)
-                    .clip(CircleShape)
-                    .clickable { onModeSelected(mode) },
+                modifier = Modifier.height(34.dp),
             ) {
                 Box(
                     modifier = Modifier.padding(horizontal = BetterSaidSpacing.Md),
@@ -270,6 +263,14 @@ private fun BetterSaidMirror(
     val innerSize = mirrorSize * 0.66f
     val iconSize = mirrorSize * 0.3f
 
+    // Capture theme colors outside Canvas so they can be used in drawWithCache.
+    val surfaceColor = MaterialTheme.colorScheme.surfaceContainer
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val outlineVariant = MaterialTheme.colorScheme.outlineVariant
+    val surfaceContainerLow = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.86f)
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val inkStrokePx = remember(density) { with(density) { BetterSaidShapes.InkStroke.toPx() } }
+
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -278,38 +279,50 @@ private fun BetterSaidMirror(
             .padding(horizontal = BetterSaidSpacing.Md),
         contentAlignment = Alignment.Center,
     ) {
-        Canvas(
-            modifier = Modifier
-                .matchParentSize()
-                .rotate(-1.4f),
-        ) {
-            val stroke = Stroke(width = 4f)
-            drawRoundRect(
-                color = Color.Black,
-                style = stroke,
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(36f, 54f),
+        // One Canvas handles the shadow outline + rotated card — zero extra GPU layers.
+        Canvas(modifier = Modifier.matchParentSize()) {
+            val padding = 3.dp.toPx()
+            val cardSize = androidx.compose.ui.geometry.Size(
+                width = size.width - padding * 2,
+                height = size.height - padding * 2,
             )
-        }
+            val cardOffset = androidx.compose.ui.geometry.Offset(padding, padding)
+            val cornerRadius = androidx.compose.ui.geometry.CornerRadius(72f, 72f)
 
-        Surface(
-            modifier = Modifier
-                .matchParentSize()
-                .padding(3.dp)
-                .rotate(0.8f),
-            shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.surfaceContainer,
-            border = BorderStroke(BetterSaidShapes.InkStroke, MaterialTheme.colorScheme.primary),
-            shadowElevation = 0.dp,
-        ) {}
+            // Shadow outline — rotated -1.4°
+            withTransform({ rotate(-1.4f) }) {
+                drawRoundRect(
+                    color = Color.Black,
+                    style = Stroke(width = 4f),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(36f, 54f),
+                )
+            }
+            // Card fill + border — rotated +0.8°
+            withTransform({ rotate(0.8f, pivot = center) }) {
+                drawRoundRect(
+                    color = surfaceColor,
+                    topLeft = cardOffset,
+                    size = cardSize,
+                    cornerRadius = cornerRadius,
+                )
+                drawRoundRect(
+                    color = primaryColor,
+                    topLeft = cardOffset,
+                    size = cardSize,
+                    cornerRadius = cornerRadius,
+                    style = Stroke(width = inkStrokePx),
+                )
+            }
+        }
 
         Column(
             modifier = Modifier
                 .size(innerSize)
                 .clip(RoundedCornerShape(28.dp))
-                .background(MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.86f))
+                .background(surfaceContainerLow)
                 .border(
                     width = BetterSaidShapes.InkStroke,
-                    color = MaterialTheme.colorScheme.outlineVariant,
+                    color = outlineVariant,
                     shape = RoundedCornerShape(28.dp),
                 )
                 .padding(BetterSaidSpacing.Md),
@@ -319,11 +332,12 @@ private fun BetterSaidMirror(
             Icon(
                 imageVector = Icons.Outlined.EditNote,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.86f),
+                tint = primaryColor.copy(alpha = 0.86f),
                 modifier = Modifier.size(iconSize),
             )
         }
 
+        // Badge — one remaining composable layer, acceptable for a 52dp element.
         Box(
             modifier = Modifier
                 .align(Alignment.TopEnd)
@@ -332,13 +346,13 @@ private fun BetterSaidMirror(
                 .rotate(12f)
                 .clip(CircleShape)
                 .background(BetterSaidYellowSoft)
-                .border(2.dp, MaterialTheme.colorScheme.primary, CircleShape),
+                .border(2.dp, primaryColor, CircleShape),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = Icons.Outlined.AutoAwesome,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
+                tint = primaryColor,
                 modifier = Modifier.size(28.dp),
             )
         }
@@ -352,12 +366,35 @@ private fun BetterSaidSpeakControl(
     modifier: Modifier = Modifier,
 ) {
     val isListening = uiState.isStarting
+    val haptic = LocalHapticFeedback.current
     val micInteractionSource = remember { MutableInteractionSource() }
     val micPressed by micInteractionSource.collectIsPressedAsState()
+
+    val snapSpec = spring<Float>(
+        dampingRatio = Spring.DampingRatioMediumBouncy,
+        stiffness = Spring.StiffnessHigh,
+    )
+    val snapDpSpec = spring<androidx.compose.ui.unit.Dp>(
+        dampingRatio = Spring.DampingRatioNoBouncy,
+        stiffness = Spring.StiffnessHigh,
+    )
     val micScale by animateFloatAsState(
-        targetValue = if (micPressed) 0.94f else 1f,
+        targetValue = if (micPressed) 0.90f else 1f,
+        animationSpec = snapSpec,
         label = "home-mic-press-scale",
     )
+    // Shadow compresses toward the button as it "presses down"
+    val shadowOffset by animateDpAsState(
+        targetValue = if (micPressed) 1.dp else 4.dp,
+        animationSpec = snapDpSpec,
+        label = "home-mic-shadow-offset",
+    )
+    val buttonLift by animateDpAsState(
+        targetValue = if (micPressed) 3.dp else 0.dp,
+        animationSpec = snapDpSpec,
+        label = "home-mic-button-lift",
+    )
+
     val statusText = when {
         uiState.isStarting -> "Listening to your thoughts..."
         uiState.isConfigured -> "Tap and speak freely"
@@ -373,33 +410,41 @@ private fun BetterSaidSpeakControl(
             text = statusText,
             modifier = Modifier.height(28.dp),
             style = MaterialTheme.typography.labelLarge,
-            color = if (isListening) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+            color = if (isListening) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
             textAlign = TextAlign.Center,
         )
 
         Box(
-            modifier = Modifier.size(106.dp),
+            modifier = Modifier.size(110.dp),
             contentAlignment = Alignment.Center,
         ) {
+            // Shadow — shrinks toward center when pressed
             Box(
                 modifier = Modifier
                     .size(96.dp)
-                    .offset(x = 4.dp, y = 4.dp)
+                    .offset(x = shadowOffset, y = shadowOffset)
                     .clip(CircleShape)
                     .background(Color.Black),
             )
+            // Button — moves toward shadow when pressed, bounces back on release
             Box(
                 modifier = Modifier
                     .size(96.dp)
+                    .offset(x = buttonLift, y = buttonLift)
                     .scale(micScale)
                     .clip(CircleShape)
-                    .background(if (isListening) BetterSaidCoralSoft else MaterialTheme.colorScheme.secondaryContainer)
+                    .background(
+                        if (isListening) BetterSaidCoralSoft
+                        else MaterialTheme.colorScheme.secondaryContainer
+                    )
                     .border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
                     .clickable(
                         enabled = uiState.isConfigured && !uiState.isStarting,
                         interactionSource = micInteractionSource,
                         indication = LocalIndication.current,
                     ) {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         onStartRequested()
                     },
                 contentAlignment = Alignment.Center,
@@ -496,99 +541,32 @@ internal fun Modifier.betterSaidPaperPattern(): Modifier {
     val dotColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.52f)
 
     return background(backgroundColor)
-        .drawBehind {
+        .drawWithCache {
+            // Build one Path with all dot ovals — computed once per size change,
+            // then issued as a single draw call every frame instead of ~1 600 drawCircle calls.
             val spacing = 20.dp.toPx()
-            val radius = 0.55.dp.toPx()
+            val r = 0.55.dp.toPx()
+            val halfSpacing = spacing / 2f
+            val canvasWidth = size.width
+            val canvasHeight = size.height
+            val path = Path()
             var y = 0f
-            while (y <= size.height + spacing) {
+            while (y <= canvasHeight + spacing) {
                 var x = 0f
-                while (x <= size.width + spacing) {
-                    drawCircle(
-                        color = dotColor,
-                        radius = radius,
-                        center = androidx.compose.ui.geometry.Offset(x, y),
-                    )
-                    drawCircle(
-                        color = dotColor,
-                        radius = radius,
-                        center = androidx.compose.ui.geometry.Offset(x + spacing / 2f, y + spacing / 2f),
-                    )
+                while (x <= canvasWidth + spacing) {
+                    path.addOval(androidx.compose.ui.geometry.Rect(
+                        left = x - r, top = y - r, right = x + r, bottom = y + r,
+                    ))
+                    path.addOval(androidx.compose.ui.geometry.Rect(
+                        left = x + halfSpacing - r, top = y + halfSpacing - r,
+                        right = x + halfSpacing + r, bottom = y + halfSpacing + r,
+                    ))
                     x += spacing
                 }
                 y += spacing
             }
-        }
-}
-
-@Composable
-internal fun SessionSetupCard(
-    uiState: ConversationUiState,
-    onStartRequested: () -> Unit,
-) {
-    AgentCard(
-        title = "Ready when you are",
-        subtitle = "BetterSaid listens first, then helps your sentence sound clearer and more natural.",
-    ) {
-        LabeledIconText(
-            icon = Icons.Outlined.Link,
-            label = "Realtime speaking loop",
-            value = "Agora connects the Android mic to the conversational AI agent so corrections can happen live.",
-        )
-
-        LabeledIconText(
-            icon = Icons.Outlined.Link,
-            label = "Gentle English coach",
-            value = "The agent listens for meaning, says the improved sentence aloud, and keeps feedback short.",
-        )
-
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            preSessionStatusChips(uiState).forEach { chip ->
-                StatusChip(
-                    text = chip.label,
-                    highlighted = chip.highlighted,
-                    accentColor = chip.accent,
-                )
+            onDrawBehind {
+                drawPath(path = path, color = dotColor)
             }
         }
-
-        ResponsiveInfoGrid(
-            items = listOf(
-                InfoItemModel(
-                    label = "Coach",
-                    value = "BetterSaid AI",
-                ),
-                InfoItemModel(
-                    label = "Setup",
-                    value = if (uiState.isConfigured) "Ready to start" else "local.properties needed",
-                ),
-                InfoItemModel(
-                    label = "Microphone",
-                    value = if (uiState.microphonePermissionGranted) {
-                        "Permission granted"
-                    } else {
-                        "Permission required"
-                    },
-                ),
-            ),
-        )
-
-        if (!uiState.isConfigured && uiState.configMessage != null) {
-            InlineNoticeCard(
-                title = "Configuration needed",
-                message = uiState.configMessage,
-                accentColor = MaterialTheme.colorScheme.error,
-                icon = Icons.Outlined.ErrorOutline,
-            )
-        }
-
-        AgentButton(
-            text = if (uiState.isStarting) "Opening the mic..." else "Start speaking",
-            modifier = Modifier.fillMaxWidth(),
-            enabled = uiState.isConfigured && !uiState.isStarting,
-            onClick = onStartRequested,
-        )
-    }
 }

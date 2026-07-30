@@ -120,4 +120,85 @@ class ConversationUiStateMapperTest {
         assertEquals("RTC failed", merged.rtcConnectionLabel)
         assertTrue(merged.inConversation)
     }
+
+    @Test
+    fun mergeSessionMapsThinkingState() {
+        val merged = ConversationUiStateMapper.mergeSession(
+            currentState = ConversationUiState(inConversation = true),
+            snapshot = SessionSnapshot(
+                rtcConnectionState = Constants.CONNECTION_STATE_CONNECTED,
+                isAgentRtcConnected = true,
+                agentState = AgentConversationState.THINKING,
+            ),
+        )
+
+        assertEquals(AgentVisualState.THINKING, merged.agentVisualState)
+        assertEquals("Thinking through a response", merged.agentStateLabel)
+    }
+
+    @Test
+    fun mergeSessionMapsIdleWhenAgentConnectedButStateIsIdle() {
+        val merged = ConversationUiStateMapper.mergeSession(
+            currentState = ConversationUiState(inConversation = true),
+            snapshot = SessionSnapshot(
+                rtcConnectionState = Constants.CONNECTION_STATE_CONNECTED,
+                isAgentRtcConnected = true,
+                agentState = AgentConversationState.IDLE,
+            ),
+        )
+
+        assertEquals(AgentVisualState.IDLE, merged.agentVisualState)
+        assertEquals("Connected and ready", merged.agentStateLabel)
+    }
+
+    @Test
+    fun mergeSessionPreservesInConversationFromCurrentState() {
+        // inConversation is ViewModel-controlled: startConversation() sets it via
+        // current.copy(inConversation=true) BEFORE calling mergeSession, so snapshot.channelName
+        // should never drive the flag. mergeSession must pass it through unchanged.
+        val mergedWhenFalse = ConversationUiStateMapper.mergeSession(
+            currentState = ConversationUiState(inConversation = false),
+            snapshot = SessionSnapshot(channelName = "my-channel"),
+        )
+        assertFalse(mergedWhenFalse.inConversation)
+
+        val mergedWhenTrue = ConversationUiStateMapper.mergeSession(
+            currentState = ConversationUiState(inConversation = true),
+            snapshot = SessionSnapshot(channelName = null),
+        )
+        assertTrue(mergedWhenTrue.inConversation)
+    }
+
+    @Test
+    fun mergeSessionSeparatesLiveFromHistory() {
+        val merged = ConversationUiStateMapper.mergeSession(
+            currentState = ConversationUiState(),
+            snapshot = SessionSnapshot(
+                transcriptTurns = listOf(
+                    TranscriptTurn(
+                        key = "a",
+                        turnId = 1,
+                        streamId = null,
+                        speaker = TranscriptSpeaker.USER,
+                        text = "Finished turn",
+                        status = TranscriptTurnStatus.END,
+                        createdAtMillis = 0,
+                    ),
+                    TranscriptTurn(
+                        key = "b",
+                        turnId = 2,
+                        streamId = null,
+                        speaker = TranscriptSpeaker.AGENT,
+                        text = "Still streaming",
+                        status = TranscriptTurnStatus.IN_PROGRESS,
+                        createdAtMillis = 1,
+                    ),
+                ),
+            ),
+        )
+
+        assertEquals(1, merged.transcriptHistory.size)
+        assertEquals("Finished turn", merged.transcriptHistory.first().text)
+        assertEquals("Still streaming", merged.liveTranscript?.text)
+    }
 }

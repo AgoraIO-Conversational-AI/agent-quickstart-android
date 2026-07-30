@@ -42,43 +42,43 @@ fun quoteSentence(sentence: String): String {
     }
 }
 
+private val RE_MULTI_SPACE = Regex("\\s+")
+
 fun String.toConversationDisplayText(): String {
+    // If the turn is a BETTERSAID_CORRECTION block, suppress it entirely — the correction
+    // details UI renders it; showing it again in the coach bubble is always wrong.
+    if (contains("BETTERSAID_CORRECTION", ignoreCase = true)) {
+        return ""
+    }
     return lineSequence()
         .map { it.trim() }
         .filter { it.isNotBlank() }
         .filterNot { line ->
-            line.equals("BETTERSAID_CORRECTION", ignoreCase = true) ||
-                line.startsWith("ORIGINAL:", ignoreCase = true) ||
+            line.startsWith("ORIGINAL:", ignoreCase = true) ||
                 line.startsWith("CORRECTED:", ignoreCase = true) ||
                 line.startsWith("TIP:", ignoreCase = true) ||
                 line.startsWith("CHANGES:", ignoreCase = true)
         }
         .joinToString(" ")
-        .replace(Regex("\\s+"), " ")
+        .replace(RE_MULTI_SPACE, " ")
         .trim()
 }
+
+internal val RE_FIELD_ORIGINAL = Regex("(?is)\\bORIGINAL\\s*:\\s*(.*?)(?=\\s+\\b(?:CORRECTED|TIP|CHANGES)\\s*:|$)")
+internal val RE_FIELD_CORRECTED = Regex("(?is)\\bCORRECTED\\s*:\\s*(.*?)(?=\\s+\\b(?:ORIGINAL|TIP|CHANGES)\\s*:|$)")
+internal val RE_FIELD_TIP = Regex("(?is)\\bTIP\\s*:\\s*(.*?)(?=\\s+\\b(?:ORIGINAL|CORRECTED|CHANGES)\\s*:|$)")
+internal val RE_FIELD_CHANGES = Regex("(?is)\\bCHANGES\\s*:\\s*(.*?)(?=\\s+\\b(?:ORIGINAL|CORRECTED|TIP)\\s*:|$)")
 
 fun parseCorrectionResponse(
     originalFallback: String,
     response: String?,
 ): ParsedCorrection {
     val raw = response.orEmpty()
-    fun field(name: String): String {
-        val nextFields = listOf("ORIGINAL", "CORRECTED", "TIP", "CHANGES")
-            .filterNot { it.equals(name, ignoreCase = true) }
-            .joinToString("|")
-        return Regex(
-            pattern = "(?is)\\b$name\\s*:\\s*(.*?)(?=\\s+\\b(?:$nextFields)\\s*:|$)",
-        ).find(raw)
-            ?.groupValues
-            ?.getOrNull(1)
-            ?.trim()
-            .orEmpty()
-    }
+    fun field(regex: Regex): String = regex.find(raw)?.groupValues?.getOrNull(1)?.trim().orEmpty()
 
-    val changes = field("CHANGES")
-    val original = field("ORIGINAL").ifBlank { originalFallback }
-    val correctedField = field("CORRECTED")
+    val changes = field(RE_FIELD_CHANGES)
+    val original = field(RE_FIELD_ORIGINAL).ifBlank { originalFallback }
+    val correctedField = field(RE_FIELD_CORRECTED)
     val extractedCorrected = correctedField.ifBlank {
         raw.extractCorrectedSentenceFallback(originalFallback = originalFallback)
     }
@@ -89,14 +89,18 @@ fun parseCorrectionResponse(
         original = original,
         corrected = corrected,
         hasCorrectedSentence = hasCorrectedSentence,
-        tip = field("TIP").ifBlank {
+        tip = field(RE_FIELD_TIP).ifBlank {
             "BetterSaid will add a specific learning tip once the correction is ready."
         },
         changes = changes,
         changePairs = parseCorrectionChanges(changes).ifEmpty {
             inferCorrectionChanges(original = original, corrected = corrected)
         },
-        coachMessage = raw.toCoachMessage(),
+        coachMessage = if (raw.contains("BETTERSAID_CORRECTION", ignoreCase = true)) {
+            "I've adjusted your sentence — ask me why a word changed, how to practice it, or try another sentence!"
+        } else {
+            raw.toConversationDisplayText()
+        },
     )
 }
 
@@ -138,22 +142,6 @@ private fun String.extractCorrectedSentenceFallback(originalFallback: String): S
         .orEmpty()
 }
 
-private fun String.toCoachMessage(): String {
-    val cleaned = lineSequence()
-        .map { it.trim() }
-        .filter { it.isNotBlank() }
-        .filterNot { line ->
-            line.equals("BETTERSAID_CORRECTION", ignoreCase = true) ||
-                line.startsWith("ORIGINAL:", ignoreCase = true) ||
-                line.startsWith("CORRECTED:", ignoreCase = true) ||
-                line.startsWith("TIP:", ignoreCase = true) ||
-                line.startsWith("CHANGES:", ignoreCase = true)
-        }
-        .joinToString(" ")
-        .trim()
-
-    return cleaned.toConversationDisplayText()
-}
 
 fun parseCorrectionChanges(changes: String): List<CorrectionChange> {
     return changes
@@ -167,7 +155,12 @@ fun parseCorrectionChanges(changes: String): List<CorrectionChange> {
                 null
             } else {
                 val from = pieces[0].trim().trim('"', '\'', '`', '-', '*')
-                val to = pieces[1].trim().trim('"', '\'', '`', '-', '*')
+                // Stop at a lowercase→UPPERCASE junction: the agent sometimes appends the
+                // spoken confirmation sentence directly to the last change with no separator
+                // (e.g. "to schoolI will go to school tomorrow."). Splitting at that boundary
+                // recovers the real change value ("to school") and discards the sentence.
+                val rawTo = pieces[1].trim().trim('"', '\'', '`', '-', '*')
+                val to = rawTo.split(Regex("(?<=[a-z])(?=[A-Z])")).first().trim()
                 if (from.isBlank() || to.isBlank()) null else CorrectionChange(from, to)
             }
         }
@@ -181,11 +174,22 @@ fun inferCorrectionChanges(
     val correctedDisplayWords = corrected.splitDisplayWords()
     val originalWords = originalDisplayWords.map { it.normalizeCorrectionToken() }
     val correctedWords = correctedDisplayWords.map { it.normalizeCorrectionToken() }
-    val matches = lcsMatches(originalWords, correctedWords)
+    return inferCorrectionChangesFromLcs(
+        originalDisplayWords = originalDisplayWords,
+        correctedDisplayWords = correctedDisplayWords,
+        matches = lcsMatches(originalWords, correctedWords),
+    )
+}
+
+private fun inferCorrectionChangesFromLcs(
+    originalDisplayWords: List<String>,
+    correctedDisplayWords: List<String>,
+    matches: List<Pair<Int, Int>>,
+): List<CorrectionChange> {
     return buildList {
         var previousOriginal = -1
         var previousCorrected = -1
-        (matches + (originalWords.size to correctedWords.size)).forEach { (nextOriginal, nextCorrected) ->
+        (matches + (originalDisplayWords.size to correctedDisplayWords.size)).forEach { (nextOriginal, nextCorrected) ->
             val originalGap = originalDisplayWords.subList(previousOriginal + 1, nextOriginal)
             val correctedGap = correctedDisplayWords.subList(previousCorrected + 1, nextCorrected)
             replacementIndexes(
@@ -232,25 +236,27 @@ fun highlightedCorrectionWords(
     changePairs: List<CorrectionChange>,
 ): List<CorrectionWord> {
     val correctedDisplayWords = quoteSentence(corrected).splitDisplayWords()
-    val originalWords = original.normalizedWords()
+    val originalDisplayWords = original.splitDisplayWords()
+    val originalWords = originalDisplayWords.map { it.normalizeCorrectionToken() }
     val correctedWords = correctedDisplayWords.map { it.normalizeCorrectionToken() }
-    val matchedCorrectedIndices = lcsMatches(originalWords, correctedWords)
-        .map { it.second }
-        .toSet()
+    val correctedWordSet = correctedWords.toHashSet()
+
+    // Compute LCS once and reuse for both matched-index calculation and inferred changes.
+    val lcs = lcsMatches(originalWords, correctedWords)
+    val matchedCorrectedIndices = lcs.mapTo(HashSet()) { it.second }
     val unmatchedCorrectedIndices = correctedWords.indices
-        .filter { index -> correctedWords[index].isNotBlank() && index !in matchedCorrectedIndices }
-        .toSet()
-    val inferredReplacementTargets = inferCorrectionChanges(original = original, corrected = corrected)
-        .flatMap { it.to.normalizedWords() }
-        .filter { it.isNotBlank() }
-        .toSet()
+        .filterTo(HashSet()) { index -> correctedWords[index].isNotBlank() && index !in matchedCorrectedIndices }
+
+    // Derive inferred changes from the already-computed LCS instead of re-running it.
+    val inferredReplacementTargets = inferCorrectionChangesFromLcs(
+        originalDisplayWords = originalDisplayWords,
+        correctedDisplayWords = correctedDisplayWords,
+        matches = lcs,
+    ).asSequence().flatMap { it.to.normalizedWords() }.filterTo(HashSet()) { it.isNotBlank() }
     val explicitReplacementTargets = changePairs
-        .flatMap { it.to.normalizedWords() }
-        .filter { it.isNotBlank() }
-        .toSet()
+        .asSequence().flatMap { it.to.normalizedWords() }.filterTo(HashSet()) { it.isNotBlank() }
     val replacementTargets = (inferredReplacementTargets + explicitReplacementTargets)
-        .filter { target -> correctedWords.any { it == target } }
-        .toSet()
+        .filterTo(HashSet()) { it in correctedWordSet }
 
     return correctedDisplayWords.mapIndexed { index, word ->
         val normalized = word.normalizeCorrectionToken()

@@ -14,10 +14,6 @@ import kotlinx.coroutines.flow.update
 data class AudioSessionSnapshot(
     val turnState: TurnState = TurnState.IDLE,
     val audioSourceLabel: String = "uninitialized",
-    val aecAvailable: Boolean = false,
-    val aecEnabled: Boolean = false,
-    val noiseSuppressorEnabled: Boolean = false,
-    val ttsQueueSize: Int = 0,
     val lastVadResult: String? = null,
     val lastBargeInEvent: String? = null,
 )
@@ -72,9 +68,6 @@ class AudioSessionManager(
             AudioSessionSnapshot(
                 turnState = TurnState.IDLE,
                 audioSourceLabel = "Agora native microphone track inactive",
-                aecAvailable = it.aecAvailable,
-                aecEnabled = it.aecEnabled,
-                noiseSuppressorEnabled = it.noiseSuppressorEnabled,
                 lastVadResult = "native_mic_track_active=false custom_audio_track_active=false",
             )
         }

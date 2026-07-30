@@ -4,9 +4,12 @@ import com.androidengineers.agent_quickstart_android.domain.correction.parseCorr
 import com.androidengineers.agent_quickstart_android.model.ConversationUiState
 import com.androidengineers.agent_quickstart_android.model.TranscriptSpeaker
 
+private val RE_MULTI_SPACE = Regex("\\s{2,}")
+
 class CorrectionAnalysisUseCases {
     fun userTranscriptForCorrection(state: ConversationUiState): String {
         val completedTurns = state.transcriptHistory
+            .asSequence()
             .filter { it.speaker == TranscriptSpeaker.USER && it.text.isNotBlank() }
             .joinToString(" ") { it.text.trim() }
         val liveTurn = state.liveTranscript
@@ -15,11 +18,10 @@ class CorrectionAnalysisUseCases {
             ?.trim()
             .orEmpty()
 
-        return listOf(completedTurns, liveTurn)
-            .filter { it.isNotBlank() }
-            .joinToString(" ")
-            .replace(Regex("\\s{2,}"), " ")
-            .trim()
+        val joined = if (liveTurn.isBlank()) completedTurns
+                     else if (completedTurns.isBlank()) liveTurn
+                     else "$completedTurns $liveTurn"
+        return joined.replace(RE_MULTI_SPACE, " ").trim()
     }
 
     fun buildAnalysisPrompt(transcript: String): String {
@@ -44,6 +46,7 @@ $transcript
         }
 
         val correctionTurn = state.transcriptHistory
+            .asSequence()
             .filter { it.speaker == TranscriptSpeaker.AGENT && it.text.isNotBlank() }
             .drop(state.correctionRequestedAgentTurnCount)
             .firstOrNull { turn ->

@@ -333,7 +333,6 @@ class ConversationAgoraApi(
 
     private data class JoinAsr(
         @SerializedName("vendor") val vendor: String,
-        @SerializedName("language") val language: String? = null,
         @SerializedName("params") val params: JoinAsrParams,
     )
 

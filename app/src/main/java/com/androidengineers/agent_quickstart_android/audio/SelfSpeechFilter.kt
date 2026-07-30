@@ -12,6 +12,7 @@ data class SelfSpeechDecision(
 class SelfSpeechFilter(
     private val interruptCommands: Set<String> = DEFAULT_INTERRUPT_COMMANDS,
 ) {
+    @Volatile
     private var currentAgentText: String = ""
 
     fun updateCurrentAgentText(text: String) {
@@ -40,8 +41,8 @@ class SelfSpeechFilter(
             )
         }
 
-        val partialWords = normalizedPartial.split(' ').filter { it.isNotBlank() }
-        val agentWords = normalizedAgentText.split(' ').filter { it.isNotBlank() }
+        val partialWords = normalizedPartial.splitToSequence(' ').filter { it.isNotBlank() }.toList()
+        val agentWords = normalizedAgentText.splitToSequence(' ').filter { it.isNotBlank() }.toList()
         val containsPhrase = partialWords.size >= 4 && normalizedAgentText.contains(normalizedPartial)
         val wordOverlap = overlapRatio(partialWords, agentWords)
         val prefixSimilarity = prefixSimilarity(partialWords, agentWords)
@@ -79,8 +80,8 @@ class SelfSpeechFilter(
     private fun normalize(text: String): String {
         return text
             .lowercase(Locale.ROOT)
-            .replace(Regex("[^a-z0-9\\s]"), " ")
-            .replace(Regex("\\s+"), " ")
+            .replace(RE_NON_ALPHANUM, " ")
+            .replace(RE_SPACES, " ")
             .trim()
     }
 
@@ -107,11 +108,13 @@ class SelfSpeechFilter(
         var best = 0.0
         val windowSize = partialWords.size
         for (startIndex in 0..(agentWords.size - windowSize).coerceAtLeast(0)) {
-            val window = agentWords.drop(startIndex).take(windowSize)
-            if (window.isEmpty()) {
-                continue
+            val endIndex = (startIndex + windowSize).coerceAtMost(agentWords.size)
+            val window = agentWords.subList(startIndex, endIndex)
+            if (window.isEmpty()) continue
+            var exactMatches = 0
+            for (i in window.indices) {
+                if (partialWords[i] == window[i]) exactMatches++
             }
-            val exactMatches = partialWords.zip(window).count { (left, right) -> left == right }
             best = max(best, exactMatches.toDouble() / partialWords.size.toDouble())
         }
         return best
@@ -126,5 +129,7 @@ class SelfSpeechFilter(
             "repeat that",
             "i meant tomorrow",
         )
+        private val RE_NON_ALPHANUM = Regex("[^a-z0-9\\s]")
+        private val RE_SPACES = Regex("\\s+")
     }
 }

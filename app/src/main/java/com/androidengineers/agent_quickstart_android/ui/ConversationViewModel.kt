@@ -9,6 +9,7 @@ import com.androidengineers.agent_quickstart_android.domain.conversation.Correct
 import com.androidengineers.agent_quickstart_android.model.ConversationUiState
 import com.androidengineers.agent_quickstart_android.model.PracticeMode
 import com.androidengineers.agent_quickstart_android.rtc.AgoraConversationSessionManager
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -16,12 +17,16 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class ConversationViewModel(
     application: Application,
 ) : AndroidViewModel(application) {
     private val repository = ConversationRepository()
-    private val sessionManager = AgoraConversationSessionManager(application)
+    private val sessionManager = AgoraConversationSessionManager(
+        context = application,
+        repository = repository,
+    )
     private val correctionAnalysis = CorrectionAnalysisUseCases()
     private val _uiState = MutableStateFlow(ConversationUiStateMapper.freshUiState())
 
@@ -33,10 +38,10 @@ class ConversationViewModel(
     init {
         viewModelScope.launch {
             sessionManager.snapshot.collectLatest { snapshot ->
-                _uiState.update { current ->
-                    val merged = ConversationUiStateMapper.mergeSession(current, snapshot)
-                    correctionAnalysis.captureCorrectionResponseIfReady(merged)
+                val merged = withContext(Dispatchers.Default) {
+                    ConversationUiStateMapper.mergeSession(_uiState.value, snapshot)
                 }
+                _uiState.value = correctionAnalysis.captureCorrectionResponseIfReady(merged)
             }
         }
     }
@@ -152,28 +157,25 @@ class ConversationViewModel(
             return
         }
 
-        viewModelScope.launch {
-            _uiState.update { it.copy(isStopping = true) }
+        val agentIdToStop = activeAgentId
+        val channelNameToStop = sessionManager.snapshot.value.channelName
 
-            val warning = activeAgentId?.let { agentId ->
-                val channelName = sessionManager.snapshot.value.channelName
-                runCatching {
-                    if (channelName != null) {
-                        repository.stopConversation(agentId, channelName)
-                    }
-                }.exceptionOrNull()?.message?.let { message ->
-                    "The local session ended, but the direct Agora REST leave request failed: $message"
-                }
+        activeAgentId = null
+        sessionManager.setActiveAgentId(null)
+
+        // freshUiState() must be written BEFORE disconnect() so that any collectLatest
+        // emission triggered by the snapshot reset already reads inConversation=false.
+        _uiState.value = ConversationUiStateMapper.freshUiState(
+            permissionGranted = currentState.microphonePermissionGranted,
+            isDarkTheme = currentState.isDarkTheme,
+        )
+        sessionManager.disconnect(resetSnapshot = true)
+
+        // Fire-and-forget: tell the agent to leave without blocking the UI transition.
+        if (agentIdToStop != null && channelNameToStop != null) {
+            viewModelScope.launch {
+                runCatching { repository.stopConversation(agentIdToStop, channelNameToStop) }
             }
-
-            activeAgentId = null
-            sessionManager.setActiveAgentId(null)
-            sessionManager.disconnect(resetSnapshot = true)
-            _uiState.value = ConversationUiStateMapper.freshUiState(
-                permissionGranted = _uiState.value.microphonePermissionGranted,
-                warningMessage = warning,
-                isDarkTheme = _uiState.value.isDarkTheme,
-            )
         }
     }
 
@@ -217,7 +219,7 @@ class ConversationViewModel(
                 )
             }
 
-            runCatching {
+            val sendFailed = runCatching {
                 sessionManager.sendTextToAgent(
                     text = correctionAnalysis.buildAnalysisPrompt(userTranscript),
                     priority = "INTERRUPT",
@@ -235,7 +237,9 @@ class ConversationViewModel(
                         errorMessage = error.message ?: "Unable to ask BetterSaid to analyze your English.",
                     )
                 }
-            }
+            }.isFailure
+
+            if (sendFailed) return@launch
 
             delay(CORRECTION_ANALYSIS_TIMEOUT_MS)
             _uiState.update {

@@ -52,13 +52,13 @@ import org.json.JSONObject
 
 class AgoraConversationSessionManager(
     context: Context,
+    private val repository: ConversationRepository = ConversationRepository(),
 ) {
     private val appContext = context.applicationContext
     private val sessionJob = SupervisorJob()
     private val scope = CoroutineScope(sessionJob + Dispatchers.Main.immediate)
     private val renewMutex = Mutex()
     private val transcriptAssembler = TranscriptAssembler()
-    private val repository = ConversationRepository()
     private val audioSessionManager = AudioSessionManager(
         context = appContext,
     ) { source, code, message ->
@@ -89,13 +89,6 @@ class AgoraConversationSessionManager(
                 updateSnapshot { current ->
                     current.copy(
                         turnState = audioSnapshot.turnState,
-                        audioSourceLabel = audioSnapshot.audioSourceLabel,
-                        aecAvailable = audioSnapshot.aecAvailable,
-                        aecEnabled = audioSnapshot.aecEnabled,
-                        noiseSuppressorEnabled = audioSnapshot.noiseSuppressorEnabled,
-                        ttsQueueSize = audioSnapshot.ttsQueueSize,
-                        lastVadResult = audioSnapshot.lastVadResult,
-                        lastBargeInEvent = audioSnapshot.lastBargeInEvent,
                     )
                 }
             }
@@ -669,7 +662,8 @@ class AgoraConversationSessionManager(
         }
     }
 
-    private val rtcEventHandler = object : IRtcEngineEventHandler() {
+    private val rtcEventHandler by lazy {
+        object : IRtcEngineEventHandler() {
         override fun onJoinChannelSuccess(channel: String, uid: Int, elapsed: Int) {
             localRtcUid = uid
             joinDeferred?.complete(uid)
@@ -752,8 +746,10 @@ class AgoraConversationSessionManager(
             renewTokens()
         }
     }
+    }
 
-    private val rtmEventListener = object : RtmEventListener {
+    private val rtmEventListener by lazy {
+        object : RtmEventListener {
         override fun onMessageEvent(event: MessageEvent) {
             handleRtmMessage(event)
         }
@@ -781,6 +777,7 @@ class AgoraConversationSessionManager(
                 else -> Unit
             }
         }
+    }
     }
 
     companion object {

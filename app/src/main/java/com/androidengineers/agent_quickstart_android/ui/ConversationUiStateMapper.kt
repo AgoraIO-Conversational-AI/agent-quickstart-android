@@ -1,6 +1,7 @@
 package com.androidengineers.agent_quickstart_android.ui
 
 import com.androidengineers.agent_quickstart_android.config.QuickstartConfig
+import com.androidengineers.agent_quickstart_android.model.AgentConversationState
 import com.androidengineers.agent_quickstart_android.model.AgentVisualState
 import com.androidengineers.agent_quickstart_android.model.ConversationUiState
 import com.androidengineers.agent_quickstart_android.model.SessionSnapshot
@@ -29,12 +30,11 @@ internal object ConversationUiStateMapper {
         currentState: ConversationUiState,
         snapshot: SessionSnapshot,
     ): ConversationUiState {
-        val liveTranscript = snapshot.transcriptTurns.lastOrNull {
+        val (liveList, history) = snapshot.transcriptTurns.partition {
             it.status == TranscriptTurnStatus.IN_PROGRESS
         }
-        val history = snapshot.transcriptTurns.filter {
-            it.status != TranscriptTurnStatus.IN_PROGRESS
-        }
+        val liveTranscript = liveList.lastOrNull()
+        val visualState = snapshot.toVisualState()
 
         return currentState.copy(
             channelName = snapshot.channelName,
@@ -44,8 +44,8 @@ internal object ConversationUiStateMapper {
                 .replace('_', ' ')
                 .lowercase(Locale.ROOT)
                 .replaceFirstChar { it.titlecase(Locale.ROOT) },
-            agentVisualState = snapshot.toVisualState(),
-            agentStateLabel = snapshot.toAgentLabel(),
+            agentVisualState = visualState,
+            agentStateLabel = visualState.toAgentLabel(),
             turnState = snapshot.turnState,
             micEnabled = snapshot.micEnabled,
             micRequestedEnabled = snapshot.micRequestedEnabled,
@@ -53,7 +53,11 @@ internal object ConversationUiStateMapper {
             transcriptHistory = history,
             liveTranscript = liveTranscript,
             issues = snapshot.issues,
-            inConversation = currentState.inConversation || snapshot.channelName != null,
+            // inConversation is driven entirely by ViewModel (startConversation / freshUiState),
+            // never by snapshot fields. startConversation() sets it via current.copy(inConversation=true)
+            // before calling mergeSession; endConversation() clears it via freshUiState() before
+            // disconnect(), so any collectLatest emission racing after that already reads false here.
+            inConversation = currentState.inConversation,
         )
     }
 
@@ -66,15 +70,15 @@ internal object ConversationUiStateMapper {
                 rtcConnectionState == Constants.CONNECTION_STATE_RECONNECTING -> AgentVisualState.WAITING
 
             !isAgentRtcConnected -> AgentVisualState.WAITING
-            agentState.name == "LISTENING" -> AgentVisualState.LISTENING
-            agentState.name == "THINKING" -> AgentVisualState.THINKING
-            agentState.name == "SPEAKING" -> AgentVisualState.SPEAKING
+            agentState == AgentConversationState.LISTENING -> AgentVisualState.LISTENING
+            agentState == AgentConversationState.THINKING -> AgentVisualState.THINKING
+            agentState == AgentConversationState.SPEAKING -> AgentVisualState.SPEAKING
             else -> AgentVisualState.IDLE
         }
     }
 
-    private fun SessionSnapshot.toAgentLabel(): String {
-        return when (toVisualState()) {
+    private fun AgentVisualState.toAgentLabel(): String {
+        return when (this) {
             AgentVisualState.WAITING -> "Waiting for the cloud agent"
             AgentVisualState.LISTENING -> "Listening for your turn"
             AgentVisualState.THINKING -> "Thinking through a response"

@@ -2,8 +2,6 @@ package com.androidengineers.agent_quickstart_android.audio
 
 import com.androidengineers.agent_quickstart_android.model.AgentConversationState
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 
 enum class TurnState {
     IDLE,
@@ -22,8 +20,6 @@ class TurnManager(
     private var agentOutputSuppressionUntilMs: Long = 0L
     private val agentOutputCooldownMs: Long = 1_500L
     private var remoteAgentState: AgentConversationState = AgentConversationState.IDLE
-
-    val state: StateFlow<TurnState> = _state.asStateFlow()
 
     @Volatile
     private var asrGateOpen: Boolean = true
@@ -63,12 +59,6 @@ class TurnManager(
             agentOutputSuppressionUntilMs,
             nowMs + agentOutputCooldownMs,
         )
-    }
-
-    @Synchronized
-    fun isAgentOutputLive(): Boolean {
-        refreshTimedAgentState(System.currentTimeMillis())
-        return _state.value == TurnState.AGENT_SPEAKING
     }
 
     fun isAsrGateOpen(): Boolean = asrGateOpen
@@ -137,11 +127,6 @@ class TurnManager(
     fun onBargeInDetected() {
         asrGateOpen = false
         transitionTo(TurnState.BARGE_IN_DETECTED, "barge-in-detected")
-    }
-
-    @Synchronized
-    fun onAgentPlaybackObserved(nowMs: Long = System.currentTimeMillis()) {
-        onAgentOutputActivity(nowMs)
     }
 
     @Synchronized

@@ -105,13 +105,6 @@ data class SessionSnapshot(
     val micEnabled: Boolean = true,
     val micRequestedEnabled: Boolean = true,
     val micAutoMuted: Boolean = false,
-    val audioSourceLabel: String = "uninitialized",
-    val aecAvailable: Boolean = false,
-    val aecEnabled: Boolean = false,
-    val noiseSuppressorEnabled: Boolean = false,
-    val ttsQueueSize: Int = 0,
-    val lastVadResult: String? = null,
-    val lastBargeInEvent: String? = null,
     val issues: List<SessionIssue> = emptyList(),
 )
 

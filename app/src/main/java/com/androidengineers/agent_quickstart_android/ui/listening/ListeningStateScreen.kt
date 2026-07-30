@@ -31,18 +31,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.History
-import androidx.compose.material.icons.outlined.Mic
-import androidx.compose.material.icons.outlined.Star
-import androidx.compose.material.icons.outlined.Stop
 import androidx.compose.material.icons.outlined.StopCircle
-import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -63,12 +59,15 @@ import com.androidengineers.agent_quickstart_android.ui.theme.BetterSaidSpacing
 import com.androidengineers.agent_quickstart_android.ui.theme.BetterSaidYellowSoft
 
 
+private val PIPE_QUIET_HEIGHTS = listOf(0.18f, 0.28f, 0.22f, 0.36f, 0.24f)
+
 @Composable
 internal fun ListeningStateScreen(
     uiState: ConversationUiState,
     bottomPadding: Dp,
     onDoneSpeaking: () -> Unit,
     onDismissMessages: () -> Unit,
+    onToggleMicrophone: () -> Unit,
 ) {
     val coachReady = uiState.isCoachReadyForSpeech()
 
@@ -117,6 +116,7 @@ internal fun ListeningStateScreen(
                         isCoachReady = coachReady,
                         micRequestedEnabled = uiState.micRequestedEnabled,
                         isSpeaking = uiState.turnState == TurnState.USER_SPEAKING,
+                        onToggleMicrophone = onToggleMicrophone,
                     )
                     DoneSpeakingButton(
                         isAnalyzing = uiState.isAnalyzingCorrection,
@@ -140,13 +140,11 @@ internal fun ListeningStateScreen(
 private fun PreparingCoachCard(uiState: ConversationUiState) {
     val title = when (uiState.agentVisualState) {
         AgentVisualState.SPEAKING -> "Coach is saying hello"
-        AgentVisualState.THINKING -> "Coach is getting ready"
         AgentVisualState.DISCONNECTED -> "Reconnecting the coach"
         else -> "Preparing your coach"
     }
     val message = when (uiState.agentVisualState) {
         AgentVisualState.SPEAKING -> "Listen first. Your mic will feel ready after the coach finishes the intro."
-        AgentVisualState.THINKING -> "One moment while BetterSaid prepares the room."
         AgentVisualState.DISCONNECTED -> "Hold on while the Agora room reconnects."
         else -> "Wait here until BetterSaid joins and starts listening."
     }
@@ -200,6 +198,7 @@ private fun SpeakingPipeWaveCard(
     isCoachReady: Boolean,
     micRequestedEnabled: Boolean,
     isSpeaking: Boolean,
+    onToggleMicrophone: () -> Unit,
 ) {
     val statusLabel = when {
         isAnalyzing -> "ANALYZING"
@@ -235,7 +234,8 @@ private fun SpeakingPipeWaveCard(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .height(132.dp),
+            .height(132.dp)
+            .clickable(enabled = !isAnalyzing, onClick = onToggleMicrophone),
         shape = RoundedCornerShape(10.dp, 18.dp, 12.dp, 16.dp),
         color = Color.White,
         border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary),
@@ -259,7 +259,7 @@ private fun SpeakingPipeWaveCard(
                 val pipeWidth = 6.dp.toPx()
                 val totalWidth = pipeCount * pipeWidth + (pipeCount - 1) * gap
                 val startX = (size.width - totalWidth) / 2f
-                val quietHeights = listOf(0.18f, 0.28f, 0.22f, 0.36f, 0.24f)
+                val quietHeights = PIPE_QUIET_HEIGHTS
 
                 repeat(pipeCount) { index ->
                     val wavePhase = ((progress + index * 0.075f) % 1f)
@@ -313,14 +313,22 @@ private fun LiveSpeechCard(
         ?.takeIf { it.speaker == TranscriptSpeaker.USER }
         ?.text
         ?.takeIf { it.isNotBlank() }
-    val lastUserText = uiState.transcriptHistory
-        .lastOrNull { it.speaker == TranscriptSpeaker.USER && it.text.isNotBlank() }
-        ?.text
+    val allCompletedUserText = remember(uiState.transcriptHistory) {
+        uiState.transcriptHistory
+            .asSequence()
+            .filter { it.speaker == TranscriptSpeaker.USER && it.text.isNotBlank() }
+            .joinToString(" ") { it.text.trim() }
+            .ifBlank { null }
+    }
     val coachReady = uiState.isCoachReadyForSpeech()
-    val transcriptText = liveUserText ?: lastUserText ?: if (coachReady) {
-        "Start speaking. Your sentence will appear here as ink on paper."
+    val transcriptText = if (liveUserText != null) {
+        if (allCompletedUserText != null) "$allCompletedUserText $liveUserText" else liveUserText
     } else {
-        "BetterSaid is joining. Your mic will open when the coach is ready."
+        allCompletedUserText ?: if (coachReady) {
+            "Start speaking. Your sentence will appear here as ink on paper."
+        } else {
+            "BetterSaid is joining. Your mic will open when the coach is ready."
+        }
     }
 
     Box(
@@ -450,8 +458,6 @@ private fun DoneSpeakingButton(
                 text = when {
                     isAnalyzing -> "ANALYZING..."
                     isCoachReady -> "DONE SPEAKING"
-                    agentVisualState == AgentVisualState.SPEAKING -> "COACH SPEAKING..."
-                    agentVisualState == AgentVisualState.THINKING -> "COACH THINKING..."
                     agentVisualState == AgentVisualState.DISCONNECTED -> "RECONNECTING..."
                     else -> "GETTING READY..."
                 },

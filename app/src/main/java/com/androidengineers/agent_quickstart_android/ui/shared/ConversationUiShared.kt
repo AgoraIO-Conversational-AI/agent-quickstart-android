@@ -2,26 +2,15 @@ package com.androidengineers.agent_quickstart_android.ui
 
 import android.content.res.Configuration
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ErrorOutline
-import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.History
-import androidx.compose.material.icons.outlined.Mic
-import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.WarningAmber
-import androidx.compose.material3.Card
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import java.util.Locale
 import com.androidengineers.agent_quickstart_android.audio.TurnState
 import com.androidengineers.agent_quickstart_android.domain.correction.CoachConversationLine
@@ -42,7 +31,6 @@ import com.androidengineers.agent_quickstart_android.ui.theme.Agentquickstartand
 internal object VoiceAiLayout {
     val ScreenPadding = 20.dp
     val SectionSpacing = 18.dp
-    val CardSpacing = 16.dp
     val ContentMaxWidth = 980.dp
     val BottomBarHeight = 116.dp
     val TranscriptMinHeight = 280.dp
@@ -72,6 +60,7 @@ internal fun ConversationUiState.isCoachReadyForSpeech(): Boolean {
     return !isStarting &&
         (
             agentVisualState == AgentVisualState.LISTENING ||
+                agentVisualState == AgentVisualState.THINKING ||
                 agentVisualState == AgentVisualState.SPEAKING ||
                 (agentVisualState == AgentVisualState.IDLE && coachHasSpoken) ||
                 (agentVisualState == AgentVisualState.WAITING && coachHasSpoken)
@@ -86,20 +75,10 @@ internal fun ConversationUiState.lastUserSentence(): String {
         ?: "Yesterday I go market and buyed fruits"
 }
 
-internal fun ConversationUiState.lastAgentSentence(): String {
-    return correctionResponseText
-        ?: transcriptHistory
-        .lastOrNull { it.speaker == TranscriptSpeaker.AGENT && it.text.isNotBlank() }
-        ?.text
-        ?: liveTranscript
-            ?.takeIf { it.speaker == TranscriptSpeaker.AGENT && it.text.isNotBlank() }
-            ?.text
-        ?: lastUserSentence()
-}
-
 internal fun ConversationUiState.currentCorrectionResponseText(): String? {
     correctionResponseText?.let { return it }
     val newAgentTurn = transcriptHistory
+        .asSequence()
         .filter { it.speaker == TranscriptSpeaker.AGENT && it.text.isNotBlank() }
         .drop(correctionRequestedAgentTurnCount)
         .firstOrNull()
@@ -111,14 +90,20 @@ internal fun ConversationUiState.currentCorrectionResponseText(): String? {
 }
 
 
+private val TENSE_KEYWORDS = listOf("past", "present", "future", "tense", "verb")
+private val ARTICLE_KEYWORDS = listOf("a ", "an ", "the ", "article")
+private val PRONOUN_KEYWORDS = listOf("pronoun", "he", "she", "they", "him", "her")
+private val PREPOSITION_KEYWORDS = listOf("preposition", "in ", "on ", "at ", "to ")
+private val PLURAL_KEYWORDS = listOf("plural", "singular", "many", "one")
+
 internal fun learningConceptLabel(tip: String): String {
     val lowerTip = tip.lowercase(Locale.ROOT)
     return when {
-        listOf("past", "present", "future", "tense", "verb").any { it in lowerTip } -> "Grammar focus: verb tense"
-        listOf("a ", "an ", "the ", "article").any { it in lowerTip } -> "Grammar focus: articles"
-        listOf("pronoun", "he", "she", "they", "him", "her").any { it in lowerTip } -> "Grammar focus: pronouns"
-        listOf("preposition", "in ", "on ", "at ", "to ").any { it in lowerTip } -> "Grammar focus: prepositions"
-        listOf("plural", "singular", "many", "one").any { it in lowerTip } -> "Grammar focus: number agreement"
+        TENSE_KEYWORDS.any { it in lowerTip } -> "Grammar focus: verb tense"
+        ARTICLE_KEYWORDS.any { it in lowerTip } -> "Grammar focus: articles"
+        PRONOUN_KEYWORDS.any { it in lowerTip } -> "Grammar focus: pronouns"
+        PREPOSITION_KEYWORDS.any { it in lowerTip } -> "Grammar focus: prepositions"
+        PLURAL_KEYWORDS.any { it in lowerTip } -> "Grammar focus: number agreement"
         else -> "Grammar focus: natural phrasing"
     }
 }
@@ -135,6 +120,7 @@ internal fun ConversationUiState.coachConversationLines(
             emptyList()
         } else {
             transcriptHistory
+                .asSequence()
                 .drop(correctionIndex + 1)
                 .filter { it.text.isNotBlank() }
                 .mapNotNull { turn ->
@@ -143,6 +129,7 @@ internal fun ConversationUiState.coachConversationLines(
                         .takeIf { it.isNotBlank() }
                         ?.let { CoachConversationLine(speaker = turn.speaker, text = it) }
                 }
+                .toList()
         }
     }
 

@@ -58,10 +58,6 @@ class AgoraLocalTokenFactory(
             TOKEN_EXPIRY_SECONDS,
         )
         rtcService.addPrivilegeRtc(
-            AccessToken2.PrivilegeRtc.PRIVILEGE_PUBLISH_VIDEO_STREAM,
-            TOKEN_EXPIRY_SECONDS,
-        )
-        rtcService.addPrivilegeRtc(
             AccessToken2.PrivilegeRtc.PRIVILEGE_PUBLISH_DATA_STREAM,
             TOKEN_EXPIRY_SECONDS,
         )
@@ -92,10 +88,6 @@ class AgoraLocalTokenFactory(
             TOKEN_EXPIRY_SECONDS,
         )
         rtcService.addPrivilegeRtc(
-            AccessToken2.PrivilegeRtc.PRIVILEGE_PUBLISH_VIDEO_STREAM,
-            TOKEN_EXPIRY_SECONDS,
-        )
-        rtcService.addPrivilegeRtc(
             AccessToken2.PrivilegeRtc.PRIVILEGE_PUBLISH_DATA_STREAM,
             TOKEN_EXPIRY_SECONDS,
         )
@@ -122,8 +114,6 @@ class AgoraLocalTokenFactory(
                 ?: throw IOException(
                     "Failed to generate $label. Verify AGORA_APP_ID and AGORA_APP_CERTIFICATE."
                 )
-        } catch (error: IOException) {
-            throw error
         } catch (error: Exception) {
             throw IOException("Failed to generate $label.", error)
         }
@@ -136,7 +126,7 @@ class AgoraLocalTokenFactory(
     }
 
     private fun generateNumericUid(): Int {
-        return Random.nextInt(100_000, 900_000)
+        return Random.nextInt(1, Int.MAX_VALUE)
     }
 
     companion object {

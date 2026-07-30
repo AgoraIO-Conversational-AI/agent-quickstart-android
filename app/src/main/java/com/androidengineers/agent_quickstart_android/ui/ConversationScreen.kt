@@ -7,12 +7,7 @@ import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.Mic
-import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -21,7 +16,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.androidengineers.agent_quickstart_android.model.ConversationUiState
 import com.androidengineers.agent_quickstart_android.model.PracticeMode
 
@@ -120,6 +114,7 @@ fun VoiceAiAppScreen(
                             bottomPadding = bottomPadding,
                             onDoneSpeaking = onDoneSpeaking,
                             onDismissMessages = onDismissMessages,
+                            onToggleMicrophone = onToggleMicrophone,
                         )
                     } else {
                         HomeSpeakScreen(

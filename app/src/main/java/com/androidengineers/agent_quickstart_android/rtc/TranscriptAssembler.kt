@@ -17,9 +17,22 @@ data class TranscriptPayload(
 
 class TranscriptAssembler {
     private val turns = mutableListOf<TranscriptTurn>()
+    private var snapshotDirty = true
+    private var cachedSnapshot: List<TranscriptTurn> = emptyList()
+
+    companion object {
+        private val TURN_ORDER = compareBy<TranscriptTurn> { it.createdAtMillis }
+            .thenBy { it.turnId }
+            .thenBy { it.key }
+        private val RE_SENTENCE_END = Regex("([.!?])([A-Za-z])")
+        private val RE_COMMA_NOSPACE = Regex(",([A-Za-z])")
+        private val RE_MULTI_SPACE = Regex("\\s{2,}")
+    }
 
     fun reset() {
         turns.clear()
+        snapshotDirty = true
+        cachedSnapshot = emptyList()
     }
 
     fun handlePayload(
@@ -70,11 +83,11 @@ class TranscriptAssembler {
     }
 
     fun snapshot(): List<TranscriptTurn> {
-        return turns.sortedWith(
-            compareBy<TranscriptTurn> { it.createdAtMillis }
-                .thenBy { it.turnId }
-                .thenBy { it.key }
-        )
+        if (snapshotDirty) {
+            cachedSnapshot = turns.sortedWith(TURN_ORDER)
+            snapshotDirty = false
+        }
+        return cachedSnapshot
     }
 
     private fun upsertTranscription(
@@ -97,6 +110,7 @@ class TranscriptAssembler {
         )
         val existingIndex = turns.indexOfFirst { it.key == key }
 
+        snapshotDirty = true
         if (existingIndex == -1) {
             turns += TranscriptTurn(
                 key = key,
@@ -129,6 +143,7 @@ class TranscriptAssembler {
         turns[matchingIndex] = turns[matchingIndex].copy(
             status = TranscriptTurnStatus.INTERRUPTED,
         )
+        snapshotDirty = true
     }
 
     private fun Int?.toTurnStatus(): TranscriptTurnStatus {
@@ -161,9 +176,9 @@ class TranscriptAssembler {
 
     private fun normalizeTranscriptSpacing(text: String): String {
         return text
-            .replace(Regex("([.!?])([A-Za-z])"), "$1 $2")
-            .replace(Regex(",([A-Za-z])"), ", $1")
-            .replace(Regex("\\s{2,}"), " ")
+            .replace(RE_SENTENCE_END, "$1 $2")
+            .replace(RE_COMMA_NOSPACE, ", $1")
+            .replace(RE_MULTI_SPACE, " ")
             .trim()
     }
 }

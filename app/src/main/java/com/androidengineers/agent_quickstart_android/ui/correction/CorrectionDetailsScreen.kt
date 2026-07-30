@@ -5,6 +5,9 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.lerp as colorLerp
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -37,7 +40,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,6 +61,10 @@ import com.androidengineers.agent_quickstart_android.domain.correction.parseCorr
 import com.androidengineers.agent_quickstart_android.domain.correction.quoteSentence
 import com.androidengineers.agent_quickstart_android.domain.correction.normalizedWords
 import com.androidengineers.agent_quickstart_android.domain.correction.normalizeCorrectionToken
+import com.androidengineers.agent_quickstart_android.domain.correction.RE_FIELD_CHANGES
+import com.androidengineers.agent_quickstart_android.domain.correction.RE_FIELD_CORRECTED
+import com.androidengineers.agent_quickstart_android.domain.correction.RE_FIELD_ORIGINAL
+import com.androidengineers.agent_quickstart_android.domain.correction.RE_FIELD_TIP
 import com.androidengineers.agent_quickstart_android.model.ConversationUiState
 import com.androidengineers.agent_quickstart_android.model.TranscriptSpeaker
 import com.androidengineers.agent_quickstart_android.ui.components.StatusChip
@@ -76,10 +83,13 @@ internal fun CorrectionDetailsScreen(
     onEndConversation: () -> Unit,
 ) {
     val correctionResponse = uiState.currentCorrectionResponseText()
-    val correction = parseCorrectionResponse(
-        originalFallback = uiState.lastUserSentence(),
-        response = correctionResponse,
-    )
+    val lastUserSentence = uiState.lastUserSentence()
+    val correction = remember(correctionResponse, lastUserSentence) {
+        parseCorrectionResponse(
+            originalFallback = lastUserSentence,
+            response = correctionResponse,
+        )
+    }
     val shouldShowCorrectionPlaceholder = !correction.hasCorrectedSentence
     val conversationLines = uiState.coachConversationLines(correction.coachMessage)
 
@@ -103,10 +113,13 @@ internal fun CorrectionDetailsScreen(
                         .widthIn(max = 672.dp),
                     verticalArrangement = Arrangement.spacedBy(BetterSaidSpacing.Xl),
                 ) {
+                    val fromTokens = remember(correction.changePairs) {
+                        correction.changePairs.map { it.from }
+                    }
                     SentenceSection(
                         label = "Your sentence",
                         sentence = correction.original,
-                        changedTokens = correction.changePairs.map { it.from },
+                        changedTokens = fromTokens,
                         muted = true,
                     )
                     CorrectionMirrorSection(
@@ -179,7 +192,9 @@ private fun CorrectionMirrorSection(
     isRefining: Boolean,
 ) {
     val transition = rememberInfiniteTransition(label = "correction-mirror")
-    val borderProgress by transition.animateFloat(
+    // Use direct State<Float> (no 'by') so the animated value is only read in the draw phase,
+    // preventing 60fps recomposition of the entire correction content tree.
+    val borderProgressState = transition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
@@ -188,11 +203,8 @@ private fun CorrectionMirrorSection(
         ),
         label = "border-progress",
     )
-    val borderColor = androidx.compose.ui.graphics.lerp(
-        MaterialTheme.colorScheme.primary,
-        MaterialTheme.colorScheme.secondary,
-        borderProgress,
-    )
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val secondaryColor = MaterialTheme.colorScheme.secondary
 
     Column(verticalArrangement = Arrangement.spacedBy(BetterSaidSpacing.Sm)) {
         Row(
@@ -214,10 +226,21 @@ private fun CorrectionMirrorSection(
         }
 
         Surface(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .drawWithContent {
+                    drawContent()
+                    // Read animation state here (draw phase only — no recomposition)
+                    val color = colorLerp(primaryColor, secondaryColor, borderProgressState.value)
+                    drawRoundRect(
+                        color = color,
+                        style = Stroke(width = 2.dp.toPx()),
+                        cornerRadius = CornerRadius(13.dp.toPx()),
+                    )
+                },
             shape = RoundedCornerShape(10.dp, 18.dp, 12.dp, 16.dp),
             color = Color.White,
-            border = BorderStroke(2.dp, borderColor),
+            border = null,
             shadowElevation = 0.dp,
         ) {
             Column(
@@ -257,13 +280,14 @@ private fun CorrectionSentenceText(
             fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
         )
     } else {
-        InlineCorrectionSentenceText(
-            words = highlightedCorrectionWords(
+        val words = remember(originalSentence, sentence, changePairs) {
+            highlightedCorrectionWords(
                 original = originalSentence,
                 corrected = sentence,
                 changePairs = changePairs,
-            ),
-        )
+            )
+        }
+        InlineCorrectionSentenceText(words = words)
     }
 }
 
@@ -435,13 +459,13 @@ private fun MarkedSentenceText(
     modifier: Modifier = Modifier,
     textStyle: androidx.compose.ui.text.TextStyle,
     italic: Boolean = false,
-    emphasizeHighlights: Boolean = false,
 ) {
-    val normalizedChanges = changedTokens
-        .flatMap { it.normalizedWords().ifEmpty { listOf(it.normalizeCorrectionToken()) } }
-        .filter { it.isNotBlank() }
-        .toSet()
-    val words = sentence.split(" ")
+    val normalizedChanges = remember(changedTokens) {
+        changedTokens.asSequence()
+            .flatMap { it.normalizedWords().ifEmpty { listOf(it.normalizeCorrectionToken()) } }
+            .filterTo(HashSet()) { it.isNotBlank() }
+    }
+    val words = remember(sentence) { sentence.split(" ") }
 
     FlowRow(
         modifier = modifier.fillMaxWidth(),
@@ -462,7 +486,7 @@ private fun MarkedSentenceText(
                 },
                 style = textStyle.copy(
                     fontStyle = if (italic) androidx.compose.ui.text.font.FontStyle.Italic else textStyle.fontStyle,
-                    fontWeight = if (highlighted && emphasizeHighlights) FontWeight.SemiBold else textStyle.fontWeight,
+                    fontWeight = textStyle.fontWeight,
                 ),
                 color = textColor,
             )
@@ -657,7 +681,7 @@ private fun FormattedCoachText(
     text: String,
     modifier: Modifier = Modifier,
 ) {
-    val blocks = text.toCoachTextBlocks()
+    val blocks = remember(text) { text.toCoachTextBlocks() }
 
     Column(
         modifier = modifier,
@@ -761,25 +785,14 @@ private fun String.toCoachTextBlocks(): List<CoachTextBlock> {
 }
 
 private fun String.toStructuredCoachTextBlocks(): List<CoachTextBlock> {
-    fun field(name: String): String {
-        val nextFields = listOf("ORIGINAL", "CORRECTED", "TIP", "CHANGES")
-            .filterNot { it.equals(name, ignoreCase = true) }
-            .joinToString("|")
-        return Regex(
-            pattern = "(?is)\\b$name\\s*:\\s*(.*?)(?=\\s+\\b(?:$nextFields)\\s*:|$)",
-        ).find(this)
-            ?.groupValues
-            ?.getOrNull(1)
-            ?.trim()
-            .orEmpty()
-    }
+    fun field(re: Regex): String = re.find(this)?.groupValues?.getOrNull(1)?.trim().orEmpty()
 
-    val original = field("ORIGINAL")
-    val corrected = field("CORRECTED")
-    val tip = field("TIP")
-    val changes = field("CHANGES")
+    val original = field(RE_FIELD_ORIGINAL)
+    val corrected = field(RE_FIELD_CORRECTED)
+    val tip = field(RE_FIELD_TIP)
+    val changes = field(RE_FIELD_CHANGES)
 
-    if (listOf(original, corrected, tip, changes).all { it.isBlank() }) {
+    if (original.isBlank() && corrected.isBlank() && tip.isBlank() && changes.isBlank()) {
         return emptyList()
     }
 
@@ -796,7 +809,7 @@ private fun String.toStructuredCoachTextBlocks(): List<CoachTextBlock> {
         changes
             .split(';', '\n')
             .map { it.trim().trim('-', '*', '•').trim() }
-            .filter { it.isNotBlank() }
+            .filter { it.isNotBlank() && (it.contains("->") || it.contains("→") || it.contains("=>")) }
             .forEach { change ->
                 add(CoachTextBlock.Bullet(change))
             }
