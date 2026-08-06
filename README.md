@@ -77,7 +77,7 @@ Most voice-AI demos on Android stop at "mic → LLM → speaker." BetterSaid goe
 | AI agent lifecycle | Agora Conversational AI REST API v2 |
 | ASR | Deepgram Nova 3 |
 | LLM | OpenAI GPT-4o mini |
-| TTS | MiniMax Speech 2.6 Turbo |
+| TTS | Murf Falcon |
 | HTTP | Retrofit 2 + OkHttp |
 | Memory leak detection | LeakCanary (debug builds) |
 
@@ -123,6 +123,7 @@ Create `local.properties` in the repo root (it is already in `.gitignore`):
 ```properties
 AGORA_APP_ID=your_agora_app_id
 AGORA_APP_CERTIFICATE=your_agora_app_certificate
+MURF_API_KEY=your_murf_api_key
 ```
 
 Optionally override defaults:
@@ -131,9 +132,13 @@ Optionally override defaults:
 AGORA_AGENT_UID=123456
 AGORA_CONVOAI_BASE_URL=https://api.agora.io/api/conversational-ai-agent/v2/projects
 AGORA_AREA=US
+MURF_VOICE_ID=Anisha
+MURF_LOCALE=en-IN
+MURF_MODEL=FALCON
+MURF_BASE_URL=wss://in.api.murf.ai/v1/speech/stream-input
 ```
 
-> **Where to find these:** Agora Console → your project → App ID and App Certificate. Make sure Conversational AI is enabled for the project.
+> **Where to find these:** Agora Console → your project → App ID and App Certificate. Make sure Conversational AI is enabled for the project. Use the Murf API dashboard for `MURF_API_KEY`.
 
 ### 3. Run
 
@@ -369,7 +374,7 @@ The *Production Token Boundary* diagram above shows the target architecture.
 |---|---|
 | Coach does not join | `AGORA_APP_ID` and `AGORA_APP_CERTIFICATE` both set; Conversational AI enabled on the project |
 | Transcripts do not appear | RTM enabled; device can reach Agora over the current network |
-| "Missing AGORA_APP_ID" banner | Add credentials to `local.properties` and rebuild |
+| "Missing AGORA_APP_ID" or "Missing MURF_API_KEY" banner | Add credentials to `local.properties` and rebuild |
 | Microphone permission denied | Grant microphone access in Android system settings |
 | Build fails on macOS | Prefix Gradle commands with `JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"` |
 | Agent stops responding mid-session | Agent auto-leaves after 30 s of silence; tap End Call and start a new session |

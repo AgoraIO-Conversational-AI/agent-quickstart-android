@@ -67,6 +67,36 @@ android {
             quote(localOrEnv("AGORA_AREA", default = "US"))
         )
         buildConfigField("int", "AGENT_UID", localOrEnv("AGORA_AGENT_UID", default = "123456"))
+        buildConfigField(
+            "String",
+            "MURF_API_KEY",
+            quote(localOrEnv("MURF_API_KEY"))
+        )
+        buildConfigField(
+            "String",
+            "MURF_BASE_URL",
+            quote(
+                localOrEnv(
+                    "MURF_BASE_URL",
+                    default = "wss://in.api.murf.ai/v1/speech/stream-input"
+                )
+            )
+        )
+        buildConfigField(
+            "String",
+            "MURF_VOICE_ID",
+            quote(localOrEnv("MURF_VOICE_ID", default = "Anisha"))
+        )
+        buildConfigField(
+            "String",
+            "MURF_LOCALE",
+            quote(localOrEnv("MURF_LOCALE", default = "en-IN"))
+        )
+        buildConfigField(
+            "String",
+            "MURF_MODEL",
+            quote(localOrEnv("MURF_MODEL", default = "FALCON"))
+        )
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

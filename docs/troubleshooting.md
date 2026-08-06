@@ -16,6 +16,7 @@ Check `local.properties` for:
 
 - `AGORA_APP_ID`
 - `AGORA_APP_CERTIFICATE`
+- `MURF_API_KEY`
 
 ## Agent Start Fails
 
@@ -25,6 +26,7 @@ Check:
 - `AGORA_APP_ID` and `AGORA_APP_CERTIFICATE` belong to the same project
 - the project supports RTC and RTM
 - the App Certificate value is complete and correct
+- the Murf API key is active and the selected `MURF_VOICE_ID` supports `MURF_LOCALE`
 
 ## RTM Login Or Transcript Flow Fails
 

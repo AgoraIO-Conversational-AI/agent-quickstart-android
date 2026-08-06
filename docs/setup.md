@@ -64,7 +64,7 @@ git clone <your-fork-or-repo-url>
 cd agent-quickstart-android
 ```
 
-### 3. Add Agora Config
+### 3. Add Agora And Murf Config
 
 Put the following values in `local.properties` at the repo root:
 
@@ -72,6 +72,7 @@ Put the following values in `local.properties` at the repo root:
 AGORA_APP_ID=your_agora_app_id
 AGORA_APP_CERTIFICATE=your_agora_app_certificate
 AGORA_AGENT_UID=123456
+MURF_API_KEY=your_murf_api_key
 ```
 
 Optional values:
@@ -79,6 +80,10 @@ Optional values:
 ```properties
 AGORA_CONVOAI_BASE_URL=https://api.agora.io/api/conversational-ai-agent/v2/projects
 AGORA_AREA=US
+MURF_VOICE_ID=Anisha
+MURF_LOCALE=en-IN
+MURF_MODEL=FALCON
+MURF_BASE_URL=wss://in.api.murf.ai/v1/speech/stream-input
 ```
 
 ### 4. Build And Run
@@ -97,25 +102,31 @@ Required in `local.properties`:
 
 - `AGORA_APP_ID`
 - `AGORA_APP_CERTIFICATE`
+- `MURF_API_KEY`
 
 Optional in `local.properties`:
 
 - `AGORA_AGENT_UID`, defaults to `123456`
 - `AGORA_CONVOAI_BASE_URL`, defaults to `https://api.agora.io/api/conversational-ai-agent/v2/projects`
 - `AGORA_AREA`, defaults to `US`
+- `MURF_VOICE_ID`, defaults to `Anisha`
+- `MURF_LOCALE`, defaults to `en-IN`
+- `MURF_MODEL`, defaults to `FALCON`
+- `MURF_BASE_URL`, defaults to `wss://in.api.murf.ai/v1/speech/stream-input`
 
 Notes:
 
 - `AGORA_APP_ID` also supports the legacy key `agora.app.id`
 - `AGORA_AREA` maps to the ConvoAI REST `geofence.area` value
+- `MURF_BASE_URL` defaults to Murf's India WebSocket endpoint for lower-latency demos in India
 
 ## Default Agent Setup
 
-The demo starts the agent with the default Agora-managed stack:
+The demo starts the agent with Agora Conversational AI and Murf Falcon TTS:
 
 - `deepgram_nova_3`
 - `openai_gpt_4o_mini`
-- `minimax_speech_2_6_turbo`
+- `murf` with `MURF_MODEL=FALCON`
 
 It also enables:
 

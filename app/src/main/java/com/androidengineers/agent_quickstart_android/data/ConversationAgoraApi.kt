@@ -204,11 +204,16 @@ class ConversationAgoraApi(
                 params = JoinAsrParams(language = "en"),
             ),
             tts = JoinTts(
-                vendor = "minimax",
+                vendor = "murf",
                 params = JoinTtsParams(
-                    voiceSetting = JoinVoiceSetting(
-                        voiceId = DEFAULT_TTS_VOICE_ID,
-                    )
+                    apiKey = QuickstartConfig.murfApiKey,
+                    baseUrl = QuickstartConfig.murfBaseUrl,
+                    voiceId = QuickstartConfig.murfVoiceId,
+                    locale = QuickstartConfig.murfLocale,
+                    rate = 0,
+                    pitch = 0,
+                    model = QuickstartConfig.murfModel,
+                    sampleRate = 24000,
                 ),
             ),
         )
@@ -367,6 +372,14 @@ class ConversationAgoraApi(
 
     private data class JoinTtsParams(
         @SerializedName("voice_setting") val voiceSetting: JoinVoiceSetting? = null,
+        @SerializedName("api_key") val apiKey: String? = null,
+        @SerializedName("base_url") val baseUrl: String? = null,
+        @SerializedName("voiceId") val voiceId: String? = null,
+        @SerializedName("locale") val locale: String? = null,
+        @SerializedName("rate") val rate: Int? = null,
+        @SerializedName("pitch") val pitch: Int? = null,
+        @SerializedName("model") val model: String? = null,
+        @SerializedName("sample_rate") val sampleRate: Int? = null,
         @SerializedName("api_subscription_key") val apiSubscriptionKey: String? = null,
         @SerializedName("speaker") val speaker: String? = null,
         @SerializedName("target_language_code") val targetLanguageCode: String? = null,
@@ -432,8 +445,7 @@ class ConversationAgoraApi(
         const val AGENT_NAME_ATTEMPTS = 2
         const val HTTP_CONFLICT = 409
         const val DEFAULT_PRESET =
-            "deepgram_nova_3,openai_gpt_4o_mini,minimax_speech_2_6_turbo"
-        const val DEFAULT_TTS_VOICE_ID = "English_captivating_female1"
+            "deepgram_nova_3,openai_gpt_4o_mini"
         const val DEFAULT_GREETING =
             "Hi, I am listening. Speak freely, then tap Done Speaking."
         const val DEFAULT_FAILURE_MESSAGE = "Please wait a moment while I shape that sentence."

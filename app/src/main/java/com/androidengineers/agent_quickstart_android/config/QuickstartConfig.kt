@@ -8,6 +8,11 @@ object QuickstartConfig {
     val convoAiBaseUrl: String = BuildConfig.AGORA_CONVOAI_BASE_URL.trim().trimEnd('/')
     val agoraArea: String = BuildConfig.AGORA_AREA.trim()
     val agentUid: Int = BuildConfig.AGENT_UID
+    val murfApiKey: String = BuildConfig.MURF_API_KEY.trim()
+    val murfBaseUrl: String = BuildConfig.MURF_BASE_URL.trim()
+    val murfVoiceId: String = BuildConfig.MURF_VOICE_ID.trim()
+    val murfLocale: String = BuildConfig.MURF_LOCALE.trim()
+    val murfModel: String = BuildConfig.MURF_MODEL.trim()
 
     fun missingRequiredValues(): List<String> {
         val missing = mutableListOf<String>()
@@ -16,6 +21,9 @@ object QuickstartConfig {
         }
         if (agoraAppCertificate.isBlank()) {
             missing += "AGORA_APP_CERTIFICATE"
+        }
+        if (murfApiKey.isBlank()) {
+            missing += "MURF_API_KEY"
         }
         return missing
     }
