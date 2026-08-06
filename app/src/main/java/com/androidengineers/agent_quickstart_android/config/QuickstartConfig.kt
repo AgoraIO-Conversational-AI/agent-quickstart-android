@@ -1,6 +1,7 @@
 package com.androidengineers.agent_quickstart_android.config
 
 import com.androidengineers.agent_quickstart_android.BuildConfig
+import java.util.Locale
 
 object QuickstartConfig {
     val agoraAppId: String = BuildConfig.AGORA_APP_ID.trim()
@@ -13,6 +14,14 @@ object QuickstartConfig {
     val murfVoiceId: String = BuildConfig.MURF_VOICE_ID.trim()
     val murfLocale: String = BuildConfig.MURF_LOCALE.trim()
     val murfModel: String = BuildConfig.MURF_MODEL.trim()
+    val asrVendor: String = BuildConfig.AGORA_ASR_VENDOR.trim().ifBlank { "deepgram" }
+    val asrLanguage: String = BuildConfig.AGORA_ASR_LANGUAGE.trim().ifBlank {
+        if (isSarvamAsr) "unknown" else "en"
+    }
+    val sarvamApiKey: String = BuildConfig.SARVAM_API_KEY.trim()
+
+    val isSarvamAsr: Boolean
+        get() = asrVendor.equals("sarvam", ignoreCase = true)
 
     fun missingRequiredValues(): List<String> {
         val missing = mutableListOf<String>()
@@ -25,7 +34,14 @@ object QuickstartConfig {
         if (murfApiKey.isBlank()) {
             missing += "MURF_API_KEY"
         }
+        if (isSarvamAsr && sarvamApiKey.isBlank()) {
+            missing += "SARVAM_API_KEY"
+        }
         return missing
+    }
+
+    fun normalizedAsrVendor(): String {
+        return asrVendor.lowercase(Locale.ROOT)
     }
 
     val isConfigured: Boolean

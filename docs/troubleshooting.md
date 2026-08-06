@@ -27,6 +27,7 @@ Check:
 - the project supports RTC and RTM
 - the App Certificate value is complete and correct
 - the Murf API key is active and the selected `MURF_VOICE_ID` supports `MURF_LOCALE`
+- Hindi/Hinglish speech uses `AGORA_ASR_VENDOR=sarvam`, `AGORA_ASR_LANGUAGE=unknown`, and a valid `SARVAM_API_KEY`
 
 ## RTM Login Or Transcript Flow Fails
 

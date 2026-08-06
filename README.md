@@ -136,9 +136,12 @@ MURF_VOICE_ID=Anisha
 MURF_LOCALE=en-IN
 MURF_MODEL=FALCON
 MURF_BASE_URL=wss://in.api.murf.ai/v1/speech/stream-input
+AGORA_ASR_VENDOR=sarvam
+AGORA_ASR_LANGUAGE=unknown
+SARVAM_API_KEY=your_sarvam_api_key
 ```
 
-> **Where to find these:** Agora Console → your project → App ID and App Certificate. Make sure Conversational AI is enabled for the project. Use the Murf API dashboard for `MURF_API_KEY`.
+> **Where to find these:** Agora Console → your project → App ID and App Certificate. Make sure Conversational AI is enabled for the project. Use the Murf API dashboard for `MURF_API_KEY`. For Hindi/Hinglish demos, use Sarvam ASR with `AGORA_ASR_VENDOR=sarvam`, `AGORA_ASR_LANGUAGE=unknown`, and `SARVAM_API_KEY`.
 
 ### 3. Run
 
@@ -348,6 +351,7 @@ flowchart TB
 | [`config/QuickstartConfig.kt`](app/src/main/java/com/androidengineers/agent_quickstart_android/config/QuickstartConfig.kt) | Reads Agora credentials from `BuildConfig` |
 | [`data/AgoraLocalTokenFactory.kt`](app/src/main/java/com/androidengineers/agent_quickstart_android/data/AgoraLocalTokenFactory.kt) | Generates short-lived on-device demo tokens (dev only) |
 | [`app/proguard-rules.pro`](app/proguard-rules.pro) | R8 rules for Agora, Retrofit, Gson, Kotlin, and Compose |
+| [`RED_TEAM.md`](RED_TEAM.md) | Day 2 guardrail probes for persona, code-mixed language, and refusal behavior |
 
 ---
 

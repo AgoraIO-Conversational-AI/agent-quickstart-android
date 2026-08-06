@@ -84,6 +84,9 @@ MURF_VOICE_ID=Anisha
 MURF_LOCALE=en-IN
 MURF_MODEL=FALCON
 MURF_BASE_URL=wss://in.api.murf.ai/v1/speech/stream-input
+AGORA_ASR_VENDOR=sarvam
+AGORA_ASR_LANGUAGE=unknown
+SARVAM_API_KEY=your_sarvam_api_key
 ```
 
 ### 4. Build And Run
@@ -113,11 +116,15 @@ Optional in `local.properties`:
 - `MURF_LOCALE`, defaults to `en-IN`
 - `MURF_MODEL`, defaults to `FALCON`
 - `MURF_BASE_URL`, defaults to `wss://in.api.murf.ai/v1/speech/stream-input`
+- `AGORA_ASR_VENDOR`, defaults to `deepgram`; use `sarvam` for Hindi/Hinglish demos
+- `AGORA_ASR_LANGUAGE`, defaults to `en`; use `unknown` with Sarvam for automatic language detection
+- `SARVAM_API_KEY`, required only when `AGORA_ASR_VENDOR=sarvam`
 
 Notes:
 
 - `AGORA_APP_ID` also supports the legacy key `agora.app.id`
 - `AGORA_AREA` maps to the ConvoAI REST `geofence.area` value
+- Deepgram with `AGORA_ASR_LANGUAGE=en` is best for English-only demos. Hindi words can be dropped before they reach the agent.
 - `MURF_BASE_URL` defaults to Murf's India WebSocket endpoint for lower-latency demos in India
 
 ## Default Agent Setup

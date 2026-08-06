@@ -97,6 +97,21 @@ android {
             "MURF_MODEL",
             quote(localOrEnv("MURF_MODEL", default = "FALCON"))
         )
+        buildConfigField(
+            "String",
+            "AGORA_ASR_VENDOR",
+            quote(localOrEnv("AGORA_ASR_VENDOR", default = "deepgram"))
+        )
+        buildConfigField(
+            "String",
+            "AGORA_ASR_LANGUAGE",
+            quote(localOrEnv("AGORA_ASR_LANGUAGE", default = "en"))
+        )
+        buildConfigField(
+            "String",
+            "SARVAM_API_KEY",
+            quote(localOrEnv("SARVAM_API_KEY"))
+        )
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

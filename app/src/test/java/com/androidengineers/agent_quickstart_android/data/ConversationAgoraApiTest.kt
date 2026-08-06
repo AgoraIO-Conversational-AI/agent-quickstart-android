@@ -79,7 +79,7 @@ class ConversationAgoraApiTest {
         assertEquals("POST", request.method)
         assertTrue(requireNotNull(request.getHeader("Authorization")).startsWith("agora token="))
         assertTrue(body.getString("name").startsWith("android-rest-agent-"))
-        assertEquals("deepgram_nova_3,openai_gpt_4o_mini", body.getString("preset"))
+        assertEquals(expectedPreset(), body.getString("preset"))
         assertEquals("room-a", properties.getString("channel"))
         assertEquals(QuickstartConfig.agentUid.toString(), properties.getString("agent_rtc_uid"))
         assertEquals("2468", properties.getJSONArray("remote_rtc_uids").getString(0))
@@ -87,13 +87,26 @@ class ConversationAgoraApiTest {
         assertEquals(30, properties.getInt("idle_timeout"))
         assertEquals(expectedGeofenceArea(QuickstartConfig.agoraArea), properties.getJSONObject("geofence").getString("area"))
         assertTrue(properties.getJSONObject("advanced_features").getBoolean("enable_rtm"))
-        assertEquals("deepgram", properties.getJSONObject("asr").getString("vendor"))
-        assertEquals("en", properties.getJSONObject("asr").getJSONObject("params").getString("language"))
+        assertEquals(QuickstartConfig.normalizedAsrVendor(), properties.getJSONObject("asr").getString("vendor"))
+        assertEquals(QuickstartConfig.asrLanguage, properties.getJSONObject("asr").getJSONObject("params").getString("language"))
+        if (QuickstartConfig.isSarvamAsr) {
+            assertEquals("en-US", properties.getJSONObject("asr").getString("language"))
+            assertEquals(QuickstartConfig.sarvamApiKey, properties.getJSONObject("asr").getJSONObject("params").getString("api_key"))
+        }
         assertEquals(15, properties.getJSONObject("llm").getInt("max_history"))
         assertTrue(systemPrompt.contains("Current practice mode: Interview"))
         assertTrue(systemPrompt.contains("job interviews"))
+        assertTrue(systemPrompt.contains("IDENTITY"))
+        assertTrue(systemPrompt.contains("OBJECTIVES"))
+        assertTrue(systemPrompt.contains("LANGUAGE"))
+        assertTrue(systemPrompt.contains("GUARDRAILS"))
+        assertTrue(systemPrompt.contains("Mirror the user's register"))
+        assertTrue(systemPrompt.contains("Never shame, mock, insult, or compare the learner."))
+        assertTrue(systemPrompt.contains("Never claim a child or adult has a learning disability"))
+        assertTrue(systemPrompt.contains("If a guardrail applies, the guardrail response wins over grammar correction."))
+        assertTrue(systemPrompt.contains("CORRECTED must be the safe refusal or escalation response"))
         assertEquals(
-            "Hi, I am listening. Speak freely, then tap Done Speaking.",
+            "Hi, I am BetterSaid, your friendly English practice coach. Speak in English, Hindi, or a natural mix. I can help you make your sentence clearer, but I will never judge you or label your ability. Speak freely, then tap Done Speaking.",
             properties.getJSONObject("llm").getString("greeting_message"),
         )
         assertEquals(
@@ -221,6 +234,14 @@ class ConversationAgoraApiTest {
             "GLOBAL" -> "GLOBAL"
             "US", "NORTH_AMERICA" -> "NORTH_AMERICA"
             else -> "NORTH_AMERICA"
+        }
+    }
+
+    private fun expectedPreset(): String {
+        return if (QuickstartConfig.isSarvamAsr) {
+            "openai_gpt_4o_mini"
+        } else {
+            "deepgram_nova_3,openai_gpt_4o_mini"
         }
     }
 }
