@@ -461,7 +461,10 @@ private fun BetterSaidSpeakControl(
 }
 
 @Composable
-internal fun BetterSaidBottomNavigation() {
+internal fun BetterSaidBottomNavigation(
+    selectedDestination: BetterSaidDestination,
+    onDestinationSelected: (BetterSaidDestination) -> Unit,
+) {
     Surface(
         modifier = Modifier.navigationBarsPadding(),
         color = MaterialTheme.colorScheme.surface,
@@ -479,18 +482,21 @@ internal fun BetterSaidBottomNavigation() {
         ) {
             BetterSaidNavItem(
                 label = "Home",
-                selected = true,
+                selected = selectedDestination == BetterSaidDestination.Home,
                 icon = Icons.Outlined.Home,
+                onClick = { onDestinationSelected(BetterSaidDestination.Home) },
             )
             BetterSaidNavItem(
                 label = "Journal",
-                selected = false,
+                selected = selectedDestination == BetterSaidDestination.Journal,
                 icon = Icons.AutoMirrored.Outlined.MenuBook,
+                onClick = { onDestinationSelected(BetterSaidDestination.Journal) },
             )
             BetterSaidNavItem(
                 label = "Settings",
-                selected = false,
+                selected = selectedDestination == BetterSaidDestination.Settings,
                 icon = Icons.Outlined.Settings,
+                onClick = { onDestinationSelected(BetterSaidDestination.Settings) },
             )
         }
     }
@@ -501,6 +507,7 @@ private fun BetterSaidNavItem(
     label: String,
     selected: Boolean,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit,
 ) {
     val containerColor = if (selected) {
         MaterialTheme.colorScheme.secondaryContainer
@@ -517,6 +524,7 @@ private fun BetterSaidNavItem(
         modifier = Modifier
             .clip(if (selected) CircleShape else RoundedCornerShape(BetterSaidShapes.Md))
             .background(containerColor)
+            .clickable(onClick = onClick)
             .padding(horizontal = 18.dp, vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(2.dp),

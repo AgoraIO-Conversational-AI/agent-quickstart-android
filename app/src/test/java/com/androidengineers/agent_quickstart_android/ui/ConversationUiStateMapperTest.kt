@@ -4,6 +4,7 @@ import com.androidengineers.agent_quickstart_android.audio.TurnState
 import com.androidengineers.agent_quickstart_android.model.AgentConversationState
 import com.androidengineers.agent_quickstart_android.model.AgentVisualState
 import com.androidengineers.agent_quickstart_android.model.ConversationUiState
+import com.androidengineers.agent_quickstart_android.model.JournalEntryUiModel
 import com.androidengineers.agent_quickstart_android.model.SessionSnapshot
 import com.androidengineers.agent_quickstart_android.model.TranscriptSpeaker
 import com.androidengineers.agent_quickstart_android.model.TranscriptTurn
@@ -18,16 +19,26 @@ import org.junit.Test
 class ConversationUiStateMapperTest {
     @Test
     fun freshUiStateCarriesTheDefaultFlags() {
+        val journalEntry = JournalEntryUiModel(
+            id = "entry-1",
+            category = "Daily Life",
+            originalText = "I goes home.",
+            correctedText = "I go home.",
+            tags = listOf("Tense"),
+            spokenAtMillis = 1_000L,
+        )
         val state = ConversationUiStateMapper.freshUiState(
             permissionGranted = true,
             warningMessage = "warning",
             errorMessage = "error",
+            journalEntries = listOf(journalEntry),
         )
 
         assertTrue(state.microphonePermissionGranted)
         assertEquals("warning", state.warningMessage)
         assertEquals("error", state.errorMessage)
         assertEquals(AgentVisualState.WAITING, state.agentVisualState)
+        assertEquals(listOf(journalEntry), state.journalEntries)
     }
 
     @Test

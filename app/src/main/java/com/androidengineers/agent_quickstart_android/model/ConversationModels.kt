@@ -138,4 +138,5 @@ data class ConversationUiState(
     val warningMessage: String? = null,
     val errorMessage: String? = null,
     val issues: List<SessionIssue> = emptyList(),
+    val journalEntries: List<JournalEntryUiModel> = emptyList(),
 )

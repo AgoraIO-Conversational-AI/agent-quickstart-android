@@ -5,7 +5,11 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.androidengineers.agent_quickstart_android.config.QuickstartConfig
 import com.androidengineers.agent_quickstart_android.data.ConversationRepository
+import com.androidengineers.agent_quickstart_android.data.JournalRepository
+import com.androidengineers.agent_quickstart_android.data.local.BetterSaidDatabase
 import com.androidengineers.agent_quickstart_android.domain.conversation.CorrectionAnalysisUseCases
+import com.androidengineers.agent_quickstart_android.domain.correction.ParsedCorrection
+import com.androidengineers.agent_quickstart_android.domain.correction.parseCorrectionResponse
 import com.androidengineers.agent_quickstart_android.model.ConversationUiState
 import com.androidengineers.agent_quickstart_android.model.PracticeMode
 import com.androidengineers.agent_quickstart_android.rtc.AgoraConversationSessionManager
@@ -23,6 +27,9 @@ class ConversationViewModel(
     application: Application,
 ) : AndroidViewModel(application) {
     private val repository = ConversationRepository()
+    private val journalRepository = JournalRepository(
+        BetterSaidDatabase.getInstance(application).journalDao(),
+    )
     private val sessionManager = AgoraConversationSessionManager(
         context = application,
         repository = repository,
@@ -34,14 +41,23 @@ class ConversationViewModel(
 
     private var activeAgentId: String? = null
     private var themeInitialized: Boolean = false
+    private val savedJournalCorrectionIds = mutableSetOf<String>()
 
     init {
+        viewModelScope.launch {
+            journalRepository.entries.collectLatest { entries ->
+                _uiState.update { it.copy(journalEntries = entries) }
+            }
+        }
+
         viewModelScope.launch {
             sessionManager.snapshot.collectLatest { snapshot ->
                 val merged = withContext(Dispatchers.Default) {
                     ConversationUiStateMapper.mergeSession(_uiState.value, snapshot)
                 }
-                _uiState.value = correctionAnalysis.captureCorrectionResponseIfReady(merged)
+                val correctedState = correctionAnalysis.captureCorrectionResponseIfReady(merged)
+                _uiState.value = correctedState
+                saveJournalEntryIfCorrectionReady(correctedState)
             }
         }
     }
@@ -146,6 +162,7 @@ class ConversationViewModel(
                     permissionGranted = _uiState.value.microphonePermissionGranted,
                     errorMessage = error.message ?: "Unable to start the Agora conversation.",
                     isDarkTheme = _uiState.value.isDarkTheme,
+                    journalEntries = _uiState.value.journalEntries,
                 )
             }
         }
@@ -168,6 +185,7 @@ class ConversationViewModel(
         _uiState.value = ConversationUiStateMapper.freshUiState(
             permissionGranted = currentState.microphonePermissionGranted,
             isDarkTheme = currentState.isDarkTheme,
+            journalEntries = currentState.journalEntries,
         )
         sessionManager.disconnect(resetSnapshot = true)
 
@@ -275,6 +293,37 @@ class ConversationViewModel(
         }
     }
 
+    private suspend fun saveJournalEntryIfCorrectionReady(state: ConversationUiState) {
+        val responseText = state.correctionResponseText ?: return
+        val originalText = state.correctionOriginalText?.takeIf { it.isNotBlank() } ?: return
+        val correctionId = state.correctionAgentTurnKey
+            ?.let { "correction-$it" }
+            ?: "correction-${state.correctionRequestedAtMillis ?: return}"
+        if (!savedJournalCorrectionIds.add(correctionId)) {
+            return
+        }
+
+        val parsedCorrection = parseCorrectionResponse(
+            originalFallback = originalText,
+            response = responseText,
+        )
+        if (!parsedCorrection.hasCorrectedSentence ||
+            parsedCorrection.corrected.normalizeForJournal() == originalText.normalizeForJournal()
+        ) {
+            return
+        }
+
+        journalRepository.saveCorrection(
+            id = correctionId,
+            originalText = parsedCorrection.original.ifBlank { originalText },
+            correctedText = parsedCorrection.corrected,
+            tipText = parsedCorrection.tip,
+            practiceMode = state.practiceMode,
+            tags = parsedCorrection.journalTags(),
+            spokenAtMillis = state.correctionRequestedAtMillis ?: System.currentTimeMillis(),
+        )
+    }
+
     override fun onCleared() {
         sessionManager.release()
         super.onCleared()
@@ -283,4 +332,35 @@ class ConversationViewModel(
     private companion object {
         const val CORRECTION_ANALYSIS_TIMEOUT_MS = 20_000L
     }
+}
+
+private fun ParsedCorrection.journalTags(): List<String> {
+    val tip = tip.lowercase()
+    return buildList {
+        if ("tense" in tip || "verb" in tip || "past" in tip || "present" in tip) {
+            add("Tense")
+        }
+        if ("preposition" in tip || " in " in tip || " on " in tip || " at " in tip || " to " in tip) {
+            add("Preposition")
+        }
+        if ("article" in tip || " a " in tip || " an " in tip || " the " in tip) {
+            add("Article")
+        }
+        if ("plural" in tip || "singular" in tip || "uncountable" in tip) {
+            add("Nouns")
+        }
+        if ("gerund" in tip || "ing" in tip) {
+            add("Gerund")
+        }
+        if (isEmpty() && changePairs.isNotEmpty()) {
+            add("Correction")
+        }
+    }
+}
+
+private fun String.normalizeForJournal(): String {
+    return trim()
+        .lowercase()
+        .replace(Regex("\\s+"), " ")
+        .trim('"', '\'', '“', '”', '.', '!', '?')
 }

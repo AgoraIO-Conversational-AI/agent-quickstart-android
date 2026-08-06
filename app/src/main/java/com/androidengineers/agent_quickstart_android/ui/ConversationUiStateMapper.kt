@@ -4,6 +4,7 @@ import com.androidengineers.agent_quickstart_android.config.QuickstartConfig
 import com.androidengineers.agent_quickstart_android.model.AgentConversationState
 import com.androidengineers.agent_quickstart_android.model.AgentVisualState
 import com.androidengineers.agent_quickstart_android.model.ConversationUiState
+import com.androidengineers.agent_quickstart_android.model.JournalEntryUiModel
 import com.androidengineers.agent_quickstart_android.model.SessionSnapshot
 import com.androidengineers.agent_quickstart_android.model.TranscriptTurnStatus
 import io.agora.rtc2.Constants
@@ -15,6 +16,7 @@ internal object ConversationUiStateMapper {
         warningMessage: String? = null,
         errorMessage: String? = null,
         isDarkTheme: Boolean = false,
+        journalEntries: List<JournalEntryUiModel> = emptyList(),
     ): ConversationUiState {
         return ConversationUiState(
             isDarkTheme = isDarkTheme,
@@ -23,6 +25,7 @@ internal object ConversationUiStateMapper {
             microphonePermissionGranted = permissionGranted,
             warningMessage = warningMessage,
             errorMessage = errorMessage,
+            journalEntries = journalEntries,
         )
     }
 

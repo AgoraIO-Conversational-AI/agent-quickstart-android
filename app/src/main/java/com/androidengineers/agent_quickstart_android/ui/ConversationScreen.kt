@@ -12,6 +12,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -58,6 +62,7 @@ fun VoiceAiAppScreen(
     onDismissMessages: () -> Unit,
 ) {
     val showCorrectionDetails = uiState.shouldShowCorrectionDetails()
+    var selectedDestination by rememberSaveable { mutableStateOf(BetterSaidDestination.Home) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -73,7 +78,10 @@ fun VoiceAiAppScreen(
         },
         bottomBar = {
             when {
-                !uiState.inConversation -> BetterSaidBottomNavigation()
+                !uiState.inConversation -> BetterSaidBottomNavigation(
+                    selectedDestination = selectedDestination,
+                    onDestinationSelected = { selectedDestination = it },
+                )
             }
         },
     ) { innerPadding ->
@@ -116,16 +124,31 @@ fun VoiceAiAppScreen(
                             onDismissMessages = onDismissMessages,
                             onToggleMicrophone = onToggleMicrophone,
                         )
-                    } else {
-                        HomeSpeakScreen(
-                            uiState = uiState,
-                            onStartRequested = onStartRequested,
-                            onPracticeModeSelected = onPracticeModeSelected,
-                            onDismissMessages = onDismissMessages,
+                    } else when (selectedDestination) {
+                        BetterSaidDestination.Home -> {
+                            HomeSpeakScreen(
+                                uiState = uiState,
+                                onStartRequested = onStartRequested,
+                                onPracticeModeSelected = onPracticeModeSelected,
+                                onDismissMessages = onDismissMessages,
+                            )
+                        }
+
+                        BetterSaidDestination.Journal -> JournalScreen(
+                            entries = uiState.journalEntries,
+                        )
+                        BetterSaidDestination.Settings -> SettingsPlaceholderScreen(
+                            onToggleTheme = onToggleTheme,
                         )
                     }
                 }
             }
         }
     }
+}
+
+internal enum class BetterSaidDestination {
+    Home,
+    Journal,
+    Settings,
 }
