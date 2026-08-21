@@ -45,6 +45,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -313,6 +314,10 @@ private fun LiveSpeechCard(
         ?.takeIf { it.speaker == TranscriptSpeaker.USER }
         ?.text
         ?.takeIf { it.isNotBlank() }
+    val liveCoachText = uiState.liveTranscript
+        ?.takeIf { it.speaker == TranscriptSpeaker.AGENT }
+        ?.text
+        ?.takeIf { it.isNotBlank() }
     val allCompletedUserText = remember(uiState.transcriptHistory) {
         uiState.transcriptHistory
             .asSequence()
@@ -321,8 +326,24 @@ private fun LiveSpeechCard(
             .ifBlank { null }
     }
     val coachReady = uiState.isCoachReadyForSpeech()
+    val speakerLabel = when {
+        uiState.isAnalyzingCorrection -> "BETTERSAID IS THINKING"
+        liveCoachText != null || uiState.turnState == TurnState.AGENT_SPEAKING -> "BETTERSAID IS SPEAKING"
+        liveUserText != null || uiState.turnState == TurnState.USER_SPEAKING -> "YOU ARE SPEAKING"
+        coachReady -> "YOUR TURN"
+        else -> "JOINING ROOM"
+    }
+    val speakerHint = when {
+        uiState.isAnalyzingCorrection -> "Murf Falcon response is being prepared"
+        liveCoachText != null || uiState.turnState == TurnState.AGENT_SPEAKING -> "Listen to the coach"
+        liveUserText != null || uiState.turnState == TurnState.USER_SPEAKING -> "Agora is carrying your live voice"
+        coachReady -> "Speak in English, Hindi, or Hinglish"
+        else -> "Waiting for the Agora voice session"
+    }
     val transcriptText = if (liveUserText != null) {
         if (allCompletedUserText != null) "$allCompletedUserText $liveUserText" else liveUserText
+    } else if (liveCoachText != null) {
+        liveCoachText
     } else {
         allCompletedUserText ?: if (coachReady) {
             "Start speaking. Your sentence will appear here as ink on paper."
@@ -357,15 +378,40 @@ private fun LiveSpeechCard(
                     .padding(BetterSaidSpacing.Lg),
                 contentAlignment = Alignment.CenterStart,
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = transcriptText,
-                        modifier = Modifier.weight(1f),
-                        style = BetterSaidSentenceStyle.copy(fontSize = 24.sp, lineHeight = 32.sp),
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f),
-                    )
-                    if (coachReady) {
-                        BlinkingInkCursor()
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(BetterSaidSpacing.Md),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = speakerLabel,
+                            modifier = Modifier.weight(0.9f),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            text = speakerHint,
+                            modifier = Modifier.weight(1.1f),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+                            textAlign = TextAlign.End,
+                        )
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = transcriptText,
+                            modifier = Modifier.weight(1f),
+                            style = BetterSaidSentenceStyle.copy(fontSize = 24.sp, lineHeight = 32.sp),
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f),
+                        )
+                        if (coachReady && liveCoachText == null) {
+                            BlinkingInkCursor()
+                        }
                     }
                 }
                 Canvas(

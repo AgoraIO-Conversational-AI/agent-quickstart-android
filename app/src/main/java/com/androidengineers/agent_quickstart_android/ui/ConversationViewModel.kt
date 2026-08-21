@@ -66,6 +66,15 @@ class ConversationViewModel(
         _uiState.update { it.copy(microphonePermissionGranted = granted) }
     }
 
+    fun showMicrophonePermissionDenied() {
+        _uiState.update {
+            it.copy(
+                errorMessage = "Microphone permission is blocked. Open Android app settings, allow microphone access, then restart the practice session.",
+                warningMessage = null,
+            )
+        }
+    }
+
     fun initializeTheme(systemDarkTheme: Boolean) {
         if (themeInitialized) {
             return

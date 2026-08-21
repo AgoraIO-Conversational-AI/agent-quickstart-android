@@ -45,6 +45,8 @@ class MainActivity : ComponentActivity() {
                     currentViewModel.updateMicrophonePermission(granted)
                     if (granted) {
                         currentViewModel.startConversation()
+                    } else {
+                        currentViewModel.showMicrophonePermissionDenied()
                     }
                 }
 
