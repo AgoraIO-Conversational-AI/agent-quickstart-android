@@ -12,6 +12,10 @@ class ConversationRepository(
         return api.checkHealth()
     }
 
+    suspend fun sendText(agentId: String, channelName: String, text: String, speak: Boolean, append: Boolean) {
+        api.sendText(agentId, channelName, text, speak, append)
+    }
+
     suspend fun requestSessionBootstrap(): AgoraTokenBundle {
         return api.requestSessionBootstrap()
     }

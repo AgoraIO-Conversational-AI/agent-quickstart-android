@@ -78,4 +78,29 @@ class ConversationAgoraApiTest {
         assertEquals("rtc-2", tokens.rtcToken)
         assertEquals("rtm-2", tokens.rtmToken)
     }
+
+    @Test
+    fun textActionsUseDistinctSpeechAndInstructionContracts() = runBlocking {
+        for (speak in listOf(false, true)) {
+            for (append in listOf(false, true)) {
+                server.enqueue(MockResponse().setBody("""{"success":true,"message":"accepted"}"""))
+                api.sendText("agent-1", "room-a", "Hello", speak, append)
+                val request = server.takeRequest()
+                val body = JsonParser.parseString(request.body.readUtf8()).asJsonObject
+                assertEquals("/v1/conversation/${if (speak) "speak" else "think"}", request.path)
+                assertEquals("agent-1", body.get("agent_id").asString)
+                assertEquals("room-a", body.get("channel_name").asString)
+                assertEquals("Hello", body.get("text").asString)
+                if (speak) {
+                    assertEquals(if (append) "APPEND" else "INTERRUPT", body.get("priority").asString)
+                    assertNull(body.get("on_speaking_action"))
+                } else {
+                    for (state in listOf("listening", "thinking", "speaking")) {
+                        assertEquals(if (append) "append" else "interrupt", body.get("on_${state}_action").asString)
+                    }
+                    assertNull(body.get("priority"))
+                }
+            }
+        }
+    }
 }

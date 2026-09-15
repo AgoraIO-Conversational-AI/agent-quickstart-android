@@ -1,6 +1,10 @@
 # Python conversation server
 
-This FastAPI service keeps the Agora App Certificate and Conversational AI REST calls off the Android device. It exposes bootstrap, join, interrupt, leave, refresh, and health endpoints on `http://127.0.0.1:8000` by default. The tunnel provider terminates public HTTPS.
+This FastAPI service keeps the Agora App Certificate and Conversational AI REST calls off the Android device. It exposes bootstrap, join, interrupt, leave, refresh, speak, think, project guidance, and health endpoints on `http://127.0.0.1:8000` by default. The tunnel provider terminates public HTTPS.
+
+Version 1.1.0 pins `agora-agents==2.8.1` and adds Conversational AI v2.12 features.
+See [text controls and project guidance](../docs/setup.md#text-controls-and-project-guidance)
+for behavior and configuration. Invalid credential lengths are rejected at startup.
 
 ## Setup
 

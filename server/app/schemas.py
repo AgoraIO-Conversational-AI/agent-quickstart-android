@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -42,6 +42,22 @@ class AgentActionRequest(BaseModel):
 class ActionResponse(BaseModel):
     success: bool
     message: str
+
+
+class TextActionRequest(AgentActionRequest):
+    model_config = {"str_strip_whitespace": True}
+    text: str = Field(min_length=1, max_length=2000)
+    interruptable: bool = True
+
+
+class SpeakRequest(TextActionRequest):
+    priority: Literal["INTERRUPT", "APPEND", "IGNORE"] = "APPEND"
+
+
+class ThinkRequest(TextActionRequest):
+    on_listening_action: Literal["interrupt", "inject", "ignore", "append"] = "append"
+    on_thinking_action: Literal["interrupt", "ignore", "append"] = "append"
+    on_speaking_action: Literal["interrupt", "ignore", "append"] = "append"
 
 
 class RefreshRequest(BaseModel):

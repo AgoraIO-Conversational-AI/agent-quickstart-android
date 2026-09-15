@@ -64,11 +64,71 @@ class AgoraClient:
         return token, token, expires_at
 
     def _build_agent(self, system_prompt: str | None = None) -> Agent:
+        tools = []
+        if self.settings.public_base_url:
+            tools.append({
+                "type": "function",
+                "function": {
+                    "name": "getProjectGuidance",
+                    "description": "Look up this Android quickstart's setup or troubleshooting instructions. Use for questions about configuring or debugging this project.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"topic": {"type": "string", "enum": ["setup", "troubleshooting"]}},
+                        "required": ["topic"],
+                        "additionalProperties": False,
+                    },
+                },
+                "execution": {"mode": "sync"},
+                "server": {
+                    "method": "GET",
+                    "url": self.settings.public_base_url.rstrip("/") + "/v1/tools/guidance?topic={{args.topic}}",
+                    "timeout_ms": 5000,
+                },
+            })
         return (
             Agent(
                 client=self._client,
-                turn_detection={"language": "en-US"},
-                advanced_features={"enable_rtm": True},
+                turn_detection={
+                    "config": {
+                        "speech_threshold": 0.5,
+                        "start_of_speech": {
+                            "mode": "vad",
+                            "vad_config": {
+                                "interrupt_duration_ms": 160,
+                                "prefix_padding_ms": 800,
+                            },
+                        },
+                        "end_of_speech": {
+                            "mode": "vad",
+                            "vad_config": {"silence_duration_ms": 640},
+                        },
+                    },
+                },
+                interruption={"enable": True, "mode": "start_of_speech"},
+                filler_words={
+                    "enable": True,
+                    "trigger": {
+                        "mode": "fixed_time",
+                        "fixed_time_config": {"response_wait_ms": 1500},
+                    },
+                    "content": {
+                        "mode": "generated",
+                        "static_config": {
+                            "phrases": [
+                                "Let me think that through.",
+                                "One moment, please.",
+                                "Give me a moment.",
+                                "I'm working on that.",
+                            ],
+                            "selection_rule": "shuffle",
+                        },
+                        "generated_config": {
+                            "prompt": "Briefly acknowledge that you are processing the request. Do not answer it or claim to have performed any action.",
+                            "fallback_strategy": "static",
+                        },
+                    },
+                },
+                advanced_features={"enable_rtm": True, "enable_tools": bool(tools)},
                 parameters={
                     "audio_scenario": "chorus",
                     "data_channel": "rtm",
@@ -89,6 +149,7 @@ class AgoraClient:
                     max_tokens=1024,
                     temperature=0.7,
                     top_p=0.95,
+                    tools=tools or None,
                 )
             )
             .with_tts(
@@ -139,6 +200,30 @@ class AgoraClient:
             raise AgoraTimeoutError("Agora interrupt request timed out.") from exc
         except (ApiError, httpx.HTTPError, RuntimeError) as exc:
             raise AgoraUpstreamError(f"Agora agent interrupt failed: {exc}") from exc
+
+    async def speak(self, agent_id: str, channel_name: str, text: str, priority: str, interruptable: bool) -> None:
+        session = self._require_session(agent_id, channel_name)
+        try:
+            await session.say(text, priority=priority, interruptable=interruptable)
+        except httpx.TimeoutException as exc:
+            raise AgoraTimeoutError("Agora speech request timed out.") from exc
+        except (ApiError, httpx.HTTPError, RuntimeError, ValueError) as exc:
+            raise AgoraUpstreamError(f"Agora speech request failed: {exc}") from exc
+
+    async def think(self, agent_id: str, channel_name: str, text: str, on_listening_action: str, on_thinking_action: str, on_speaking_action: str, interruptable: bool) -> None:
+        session = self._require_session(agent_id, channel_name)
+        try:
+            await session.think(
+                text,
+                on_listening_action=on_listening_action,
+                on_thinking_action=on_thinking_action,
+                on_speaking_action=on_speaking_action,
+                interruptable=interruptable,
+            )
+        except httpx.TimeoutException as exc:
+            raise AgoraTimeoutError("Agora instruction request timed out.") from exc
+        except (ApiError, httpx.HTTPError, RuntimeError, ValueError) as exc:
+            raise AgoraUpstreamError(f"Agora instruction request failed: {exc}") from exc
 
     async def leave_agent(self, agent_id: str, channel_name: str) -> None:
         session = self._require_session(agent_id, channel_name)

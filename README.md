@@ -8,7 +8,20 @@ It gives you a Kotlin + Jetpack Compose app backed by a small Python service tha
 - starts and manages an Agora Conversational AI agent through the backend
 - listens for transcript, agent state, and pipeline metrics over RTM
 - lets the user talk, mute, interrupt, and end the session
+- supports typed instructions, direct speech, and queued requests
+- fills long response pauses with generated phrases and static fallbacks
+- optionally looks up the project's setup and troubleshooting guidance
 - keeps the App Certificate and token generation off the Android device
+
+## Release 1.1.0 — Agora Conversational AI v2.12
+
+This release integrates the Conversational AI Engine's v2.12 features with
+`agora-agents==2.8.1` on the Python backend. Android uses RTC `4.6.4` and RTM
+`2.3.0`. Engine, Python SDK, and Android SDK versions are independent.
+
+See [the changelog](CHANGELOG.md) for the changes and [setup instructions](docs/setup.md#text-controls-and-project-guidance)
+for the new text controls and optional custom tool. Each developer runs their
+own backend and configures its HTTPS URL before building the Android app.
 
 > [!NOTE]
 > This quickstart requires the included Python backend. Local mobile testing uses a temporary public HTTPS tunnel so the Android device can reach the development server.

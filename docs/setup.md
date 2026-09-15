@@ -134,7 +134,38 @@ It also enables:
 - RTM pipeline metrics
 - agent subscription scoped to the generated requester RTC UID
 - chorus audio scenario for the agent and local RTC engine
-- SDK-managed turn detection
+- explicit VAD turn detection and speech-triggered interruption
+- generated filler phrases after 1.5 seconds, with static fallback phrases
+
+## Text Controls And Project Guidance
+
+During a session, use **Send text to Ada**:
+
+- **Ask Ada** sends an instruction for the LLM to process.
+- **Read aloud** sends text directly to speech synthesis.
+- **Queue instead of interrupting** defaults to enabled. For instructions, the
+  `append` action starts a new turn after the current turn's LLM output finishes;
+  it does not guarantee waiting for all current audio playback to finish. For
+  direct speech, `APPEND` queues after current speech. Clear the checkbox to
+  interrupt immediately.
+
+These controls use the Python backend's `/v1/conversation/think` and
+`/v1/conversation/speak` endpoints. RTC/RTM still carries audio and agent events.
+The Android Client Toolkit is not required by this implementation.
+
+To let Ada look up this project's setup and troubleshooting guidance, set
+`PUBLIC_BASE_URL=https://your-public-host` in `server/.env.local` and restart the
+server. Use the same reachable HTTPS backend base URL configured for Android.
+Update it and restart after changing tunnel URLs. Start a new conversation to
+apply agent configuration changes.
+
+The `getProjectGuidance` tool calls `GET /v1/tools/guidance?topic=setup` or
+`topic=troubleshooting`. It serves only these two public project documents;
+include the repository's `docs` directory when deploying the server. When
+`PUBLIC_BASE_URL` is empty, no custom tool is advertised to the agent.
+
+The server pins `agora-agents==2.8.1`. After pulling the update, install
+`server/requirements-dev.txt` in a Python 3.10+ environment and restart the server.
 
 ## Production Security
 

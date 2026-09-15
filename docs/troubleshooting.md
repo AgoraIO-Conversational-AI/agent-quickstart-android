@@ -12,10 +12,9 @@ This checks credentials, project binding, feature enablement, network reachabili
 
 ## App Says Configuration Is Missing
 
-Check `local.properties` for:
-
-- `AGORA_APP_ID`
-- `AGORA_APP_CERTIFICATE`
+Check `local.properties` for `QUICKSTART_SERVER_URL`, pointing to the running
+backend's public HTTPS URL. Rebuild after changing it. Keep `AGORA_APP_ID` and
+`AGORA_APP_CERTIFICATE` in `server/.env.local`, never in Android configuration.
 
 ## Agent Start Fails
 

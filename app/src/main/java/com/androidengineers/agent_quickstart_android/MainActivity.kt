@@ -73,6 +73,8 @@ class MainActivity : ComponentActivity() {
                     onToggleMicrophone = viewModel::toggleMicrophone,
                     onToggleTheme = viewModel::toggleTheme,
                     onDismissMessages = viewModel::clearTransientMessages,
+                    onTextChanged = viewModel::updateTextDraft,
+                    onSendText = viewModel::sendText,
                 )
             }
         }

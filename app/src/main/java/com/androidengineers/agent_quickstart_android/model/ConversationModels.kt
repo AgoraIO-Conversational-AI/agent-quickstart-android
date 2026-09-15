@@ -101,6 +101,10 @@ data class SessionSnapshot(
 )
 
 data class ConversationUiState(
+    val textDraft: String = "",
+    val isSendingText: Boolean = false,
+    val textActionStatus: String? = null,
+    val canSendText: Boolean = false,
     val isDarkTheme: Boolean = false,
     val isConfigured: Boolean = false,
     val configMessage: String? = null,

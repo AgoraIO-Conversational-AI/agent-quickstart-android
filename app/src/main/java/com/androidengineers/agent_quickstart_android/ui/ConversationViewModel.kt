@@ -129,6 +129,7 @@ class ConversationViewModel(
                         current.copy(
                             isStarting = false,
                             inConversation = true,
+                            canSendText = activeAgentId != null,
                             warningMessage = warning,
                         ),
                         sessionManager.snapshot.value,
@@ -179,6 +180,34 @@ class ConversationViewModel(
 
     fun toggleMicrophone() {
         sessionManager.setMicrophoneEnabled(!_uiState.value.micRequestedEnabled)
+    }
+
+    fun updateTextDraft(text: String) {
+        _uiState.update { it.copy(textDraft = text.take(2000), textActionStatus = null) }
+    }
+
+    fun sendText(speak: Boolean, append: Boolean) {
+        val state = _uiState.value
+        val agentId = activeAgentId ?: return
+        val channel = sessionManager.snapshot.value.channelName ?: return
+        val text = state.textDraft.trim()
+        if (text.isEmpty() || state.isSendingText || state.isStopping || !state.inConversation) return
+        _uiState.update { it.copy(isSendingText = true, textActionStatus = null) }
+        viewModelScope.launch {
+            val result = runCatching { repository.sendText(agentId, channel, text, speak, append) }
+            // A reply from an ended session must not modify a newly started one.
+            if (activeAgentId != agentId) return@launch
+            _uiState.update {
+                it.copy(
+                    isSendingText = false,
+                    textDraft = if (result.isSuccess && it.textDraft == state.textDraft) "" else it.textDraft,
+                    textActionStatus = if (result.isSuccess) {
+                        if (speak) "Speech request accepted" else "Instruction accepted"
+                    } else null,
+                    errorMessage = result.exceptionOrNull()?.message,
+                )
+            }
+        }
     }
 
     fun clearTransientMessages() {

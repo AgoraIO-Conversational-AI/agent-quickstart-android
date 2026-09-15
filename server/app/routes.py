@@ -3,7 +3,8 @@ from __future__ import annotations
 import random
 import secrets
 import time
-from typing import Any
+from pathlib import Path
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
@@ -19,6 +20,8 @@ from .schemas import (
     JoinResponse,
     RefreshRequest,
     RefreshResponse,
+    SpeakRequest,
+    ThinkRequest,
 )
 from .security import build_rate_limiter
 from .session_store import SessionRecord, SessionStore
@@ -28,6 +31,14 @@ def create_router(settings: Settings, store: SessionStore, agora: AgoraClient) -
     router = APIRouter()
     rate_limit = build_rate_limiter(settings)
     throttled = [Depends(rate_limit)]
+
+    @router.get("/v1/tools/guidance", dependencies=throttled)
+    def guidance(topic: Literal["setup", "troubleshooting"]):
+        # Only these public project documents are readable; no arbitrary paths.
+        path = Path(__file__).resolve().parents[2] / "docs" / f"{topic}.md"
+        if not path.is_file():
+            raise HTTPException(status_code=503, detail="Project guidance is unavailable.")
+        return {"topic": topic, "source": f"docs/{topic}.md", "content": path.read_text(encoding="utf-8")}
 
     @router.get("/health", response_model=HealthResponse)
     async def health() -> HealthResponse:
@@ -129,6 +140,18 @@ def create_router(settings: Settings, store: SessionStore, agora: AgoraClient) -
         await call_agora(agora.leave_agent(body.agent_id, body.channel_name))
         await store.remove(body.channel_name)
         return ActionResponse(success=True, message="Agent left the channel.")
+
+    @router.post("/v1/conversation/speak", response_model=ActionResponse, dependencies=throttled)
+    async def speak(body: SpeakRequest) -> ActionResponse:
+        await require_agent(store, body)
+        await call_agora(agora.speak(**body.model_dump()))
+        return ActionResponse(success=True, message="Speech request accepted.")
+
+    @router.post("/v1/conversation/think", response_model=ActionResponse, dependencies=throttled)
+    async def think(body: ThinkRequest) -> ActionResponse:
+        await require_agent(store, body)
+        await call_agora(agora.think(**body.model_dump()))
+        return ActionResponse(success=True, message="Instruction accepted.")
 
     @router.post(
         "/v1/conversation/refresh",

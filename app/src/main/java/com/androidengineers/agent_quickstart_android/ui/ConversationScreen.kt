@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -42,9 +43,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.FilterChip
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -101,6 +108,8 @@ fun ConversationScreen(
     onToggleMicrophone: () -> Unit,
     onToggleTheme: () -> Unit,
     onDismissMessages: () -> Unit,
+    onTextChanged: (String) -> Unit = {},
+    onSendText: (Boolean, Boolean) -> Unit = { _, _ -> },
 ) {
     VoiceAiAppScreen(
         uiState = uiState,
@@ -109,6 +118,8 @@ fun ConversationScreen(
         onToggleMicrophone = onToggleMicrophone,
         onToggleTheme = onToggleTheme,
         onDismissMessages = onDismissMessages,
+        onTextChanged = onTextChanged,
+        onSendText = onSendText,
     )
 }
 
@@ -120,8 +131,11 @@ fun VoiceAiAppScreen(
     onToggleMicrophone: () -> Unit,
     onToggleTheme: () -> Unit,
     onDismissMessages: () -> Unit,
+    onTextChanged: (String) -> Unit = {},
+    onSendText: (Boolean, Boolean) -> Unit = { _, _ -> },
 ) {
     Scaffold(
+        modifier = Modifier.imePadding(),
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets.safeDrawing,
         topBar = {
@@ -171,6 +185,8 @@ fun VoiceAiAppScreen(
                             uiState = uiState,
                             bottomPadding = bottomPadding,
                             onDismissMessages = onDismissMessages,
+                            onTextChanged = onTextChanged,
+                            onSendText = onSendText,
                         )
                     } else {
                         PreSessionScreen(
@@ -343,6 +359,8 @@ fun ConnectedSessionScreen(
     uiState: ConversationUiState,
     bottomPadding: Dp,
     onDismissMessages: () -> Unit,
+    onTextChanged: (String) -> Unit = {},
+    onSendText: (Boolean, Boolean) -> Unit = { _, _ -> },
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -370,6 +388,10 @@ fun ConnectedSessionScreen(
             )
         }
 
+        item {
+            AgentTextControls(uiState, onTextChanged, onSendText)
+        }
+
         if (uiState.issues.isNotEmpty()) {
             item {
                 IssuesPanel(issues = uiState.issues)
@@ -378,6 +400,48 @@ fun ConnectedSessionScreen(
 
         item {
             LiveSessionCard(uiState = uiState)
+        }
+    }
+}
+
+@Composable
+private fun AgentTextControls(
+    uiState: ConversationUiState,
+    onTextChanged: (String) -> Unit,
+    onSendText: (Boolean, Boolean) -> Unit,
+) {
+    var speak by rememberSaveable { mutableStateOf(false) }
+    var append by rememberSaveable { mutableStateOf(true) }
+    val enabled = uiState.canSendText && !uiState.isStopping && !uiState.isSendingText
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Send text to Ada", style = MaterialTheme.typography.titleMedium)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(selected = !speak, onClick = { speak = false }, enabled = enabled, label = { Text("Ask Ada") })
+                FilterChip(selected = speak, onClick = { speak = true }, enabled = enabled, label = { Text("Read aloud") })
+            }
+            Text(
+                if (speak) "Ada speaks your text exactly as written." else "Ada processes your text and responds.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            OutlinedTextField(
+                value = uiState.textDraft,
+                onValueChange = onTextChanged,
+                enabled = enabled,
+                label = { Text(if (speak) "Text to read" else "Your message") },
+                modifier = Modifier.fillMaxWidth(),
+                maxLines = 4,
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = append, onCheckedChange = { append = it }, enabled = enabled)
+                Text("Queue instead of interrupting", style = MaterialTheme.typography.bodyMedium)
+            }
+            AgentButton(
+                text = if (uiState.isSendingText) "Sending…" else "Send",
+                enabled = enabled && uiState.textDraft.isNotBlank(),
+                onClick = { onSendText(speak, append) },
+            )
+            uiState.textActionStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         }
     }
 }

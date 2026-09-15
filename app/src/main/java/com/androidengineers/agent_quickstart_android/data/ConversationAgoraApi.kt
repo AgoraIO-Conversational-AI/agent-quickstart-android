@@ -101,6 +101,18 @@ class ConversationAgoraApi(
         ).requireSuccess()
     }
 
+    suspend fun sendText(agentId: String, channelName: String, text: String, speak: Boolean, append: Boolean) {
+        val action = if (append) "append" else "interrupt"
+        val request = TextActionRequest(
+            agentId = agentId, channelName = channelName, text = text,
+            priority = if (speak) action.uppercase() else null,
+            onListeningAction = if (speak) null else action,
+            onThinkingAction = if (speak) null else action,
+            onSpeakingAction = if (speak) null else action,
+        )
+        if (speak) service.speak(request).requireSuccess() else service.think(request).requireSuccess()
+    }
+
     private fun <T> Response<T>.requireBody(): T {
         if (!isSuccessful) throw toIOException()
         return body() ?: throw IOException("The quickstart server returned an empty response.")
@@ -129,6 +141,12 @@ class ConversationAgoraApi(
     }
 
     private interface ConversationBackendService {
+        @POST("v1/conversation/speak")
+        suspend fun speak(@Body request: TextActionRequest): Response<ActionResponse>
+
+        @POST("v1/conversation/think")
+        suspend fun think(@Body request: TextActionRequest): Response<ActionResponse>
+
         @GET("health")
         suspend fun health(): Response<HealthResponse>
 
@@ -159,6 +177,17 @@ class ConversationAgoraApi(
     }
 
     private class BootstrapRequest
+
+    private data class TextActionRequest(
+        @SerializedName("agent_id") val agentId: String,
+        @SerializedName("channel_name") val channelName: String,
+        val text: String,
+        val priority: String?,
+        @SerializedName("on_listening_action") val onListeningAction: String?,
+        @SerializedName("on_thinking_action") val onThinkingAction: String?,
+        @SerializedName("on_speaking_action") val onSpeakingAction: String?,
+        val interruptable: Boolean = true,
+    )
 
     private data class JoinRequest(
         @SerializedName("channel_name") val channelName: String,
