@@ -5,14 +5,14 @@ import time
 from typing import Any
 
 import httpx
-from agora_agent import Agent, Area, AsyncAgora, DeepgramSTT, MiniMaxTTS, OpenAI
+from agora_agent import Agent, Area, AsyncAgora, GeminiLive
 from agora_agent.agentkit import generate_convo_ai_token
 from agora_agent.core.api_error import ApiError
 
 from .config import Settings
 
 
-DEFAULT_SYSTEM_PROMPT = """You are Ada, an agentic developer advocate from Agora. Help developers understand and build with Agora Conversational AI. Be concise and technically precise. If you do not know an Agora-specific fact, say so and suggest checking docs.agora.io."""
+DEFAULT_SYSTEM_PROMPT = """You are Live Lens, a realtime voice assistant. Help the user reason about what they describe from their surroundings or camera view. Be concise, ask for clarification when visual details are missing, and do not claim that you can see the camera feed unless visual context is explicitly provided to you."""
 
 
 class AgoraUpstreamError(RuntimeError):
@@ -34,6 +34,25 @@ AREA_BY_NAME = {
     "CN": Area.CN,
 }
 
+
+
+
+def _humanize_agora_start_error(exc: BaseException, model: str) -> str:
+    raw = str(exc).strip()
+    generic_preview_rejection = (
+        "status_code: 400" in raw
+        and "reason" in raw
+        and "success" in raw.lower()
+        and "detail" in raw
+    )
+    if generic_preview_rejection and model.startswith("models/gemini-3.8-live"):
+        return (
+            "Agora accepted the request format but rejected the Gemini Live preview start. "
+            f"The configured Google key/project likely does not have access to {model}, "
+            "or the Agora project is not enabled for the Gemini Live preview. "
+            "Use a Gemini API key that lists this model, then restart the local server."
+        )
+    return f"Agora Conversational AI start failed: {raw}"
 
 class AgoraClient:
     def __init__(self, settings: Settings, http_client: httpx.AsyncClient | None = None) -> None:
@@ -65,7 +84,7 @@ class AgoraClient:
 
     def _build_agent(self, system_prompt: str | None = None) -> Agent:
         tools = []
-        if self.settings.public_base_url:
+        if self.settings.public_base_url and not self.settings.llm_model.lower().startswith("gemini"):
             tools.append({
                 "type": "function",
                 "function": {
@@ -85,78 +104,38 @@ class AgoraClient:
                     "timeout_ms": 5000,
                 },
             })
-        return (
-            Agent(
-                client=self._client,
+        agent = Agent(
+            client=self._client,
+            advanced_features={"enable_rtm": True},
+            parameters={
+                "audio_scenario": "chorus",
+                "data_channel": "rtm",
+                "enable_error_message": True,
+                "enable_metrics": True,
+            },
+        )
+
+        return agent.with_mllm(
+            GeminiLive(
+                api_key=self.settings.gemini_api_key,
+                model=self.settings.llm_model,
+                instructions=system_prompt or DEFAULT_SYSTEM_PROMPT,
+                voice=self.settings.gemini_voice,
+                input_modalities=["audio"],
+                output_modalities=["audio"],
+                transcribe_agent=True,
+                transcribe_user=True,
+                http_options={"api_version": self.settings.gemini_api_version},
+                thinking_level=self.settings.gemini_thinking_level or None,
                 turn_detection={
-                    "config": {
-                        "speech_threshold": 0.5,
-                        "start_of_speech": {
-                            "mode": "vad",
-                            "vad_config": {
-                                "interrupt_duration_ms": 160,
-                                "prefix_padding_ms": 800,
-                            },
-                        },
-                        "end_of_speech": {
-                            "mode": "vad",
-                            "vad_config": {"silence_duration_ms": 640},
-                        },
+                    "mode": "agora_vad",
+                    "agora_vad_config": {
+                        "interrupt_duration_ms": 160,
+                        "prefix_padding_ms": 800,
+                        "silence_duration_ms": 640,
+                        "threshold": 0.5,
                     },
                 },
-                interruption={"enable": True, "mode": "start_of_speech"},
-                filler_words={
-                    "enable": True,
-                    "trigger": {
-                        "mode": "fixed_time",
-                        "fixed_time_config": {"response_wait_ms": 1500},
-                    },
-                    "content": {
-                        "mode": "generated",
-                        "static_config": {
-                            "phrases": [
-                                "Let me think that through.",
-                                "One moment, please.",
-                                "Give me a moment.",
-                                "I'm working on that.",
-                            ],
-                            "selection_rule": "shuffle",
-                        },
-                        "generated_config": {
-                            "prompt": "Briefly acknowledge that you are processing the request. Do not answer it or claim to have performed any action.",
-                            "fallback_strategy": "static",
-                        },
-                    },
-                },
-                advanced_features={"enable_rtm": True, "enable_tools": bool(tools)},
-                parameters={
-                    "audio_scenario": "chorus",
-                    "data_channel": "rtm",
-                    "enable_error_message": True,
-                    "enable_metrics": True,
-                },
-            )
-            .with_stt(DeepgramSTT(model=self.settings.asr_model, language="en"))
-            .with_llm(
-                OpenAI(
-                    model=self.settings.llm_model,
-                    system_messages=[
-                        {"role": "system", "content": system_prompt or DEFAULT_SYSTEM_PROMPT}
-                    ],
-                    greeting_message="Hi there!",
-                    failure_message="Please wait a moment.",
-                    max_history=15,
-                    max_tokens=1024,
-                    temperature=0.7,
-                    top_p=0.95,
-                    tools=tools or None,
-                )
-            )
-            .with_tts(
-                MiniMaxTTS(
-                    model=self.settings.tts_model,
-                    voice_id=self.settings.tts_voice_id,
-                )
             )
         )
 
@@ -182,7 +161,8 @@ class AgoraClient:
         except httpx.TimeoutException as exc:
             raise AgoraTimeoutError("Agora request timed out.") from exc
         except (ApiError, httpx.HTTPError, RuntimeError, ValueError) as exc:
-            raise AgoraUpstreamError(f"Agora Conversational AI start failed: {exc}") from exc
+            message = _humanize_agora_start_error(exc, self.settings.llm_model)
+            raise AgoraUpstreamError(message) from exc
         if not agent_id:
             raise AgoraUpstreamError("Agora response did not include agent_id.")
         self._sessions[agent_id] = (channel_name, session)
@@ -191,6 +171,74 @@ class AgoraClient:
             "create_ts": int(time.time()),
             "status": "started",
         }
+
+
+    async def analyze_camera_frame(
+        self,
+        image_base64: str,
+        mime_type: str,
+        question: str | None = None,
+    ) -> str:
+        prompt = (
+            "You are the vision module for Live Lens. Describe the visible scene in 2-4 concise sentences. "
+            "Focus on objects, text, device state, hazards, and details useful for answering the user's next spoken question. "
+            "If the image is blurry or unclear, say what is uncertain."
+        )
+        if question:
+            prompt += f" User focus: {question.strip()}"
+        url = (
+            "https://generativelanguage.googleapis.com/"
+            f"{self.settings.gemini_api_version}/{self.settings.gemini_vision_model}:generateContent"
+        )
+        payload = {
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [
+                        {"text": prompt},
+                        {
+                            "inline_data": {
+                                "mime_type": mime_type,
+                                "data": image_base64,
+                            }
+                        },
+                    ],
+                }
+            ],
+            "generationConfig": {
+                "temperature": 0.2,
+                "maxOutputTokens": 220,
+            },
+        }
+        try:
+            response = await self._http.post(
+                url,
+                params={"key": self.settings.gemini_api_key},
+                json=payload,
+            )
+            response.raise_for_status()
+        except httpx.TimeoutException as exc:
+            raise AgoraTimeoutError("Gemini vision request timed out.") from exc
+        except httpx.HTTPStatusError as exc:
+            detail = exc.response.text[:500]
+            raise AgoraUpstreamError(f"Gemini vision request failed with status {exc.response.status_code}: {detail}") from exc
+        except httpx.HTTPError as exc:
+            raise AgoraUpstreamError(f"Gemini vision request failed: {exc}") from exc
+
+        body = response.json()
+        parts = (
+            body.get("candidates", [{}])[0]
+            .get("content", {})
+            .get("parts", [])
+        )
+        summary = " ".join(
+            str(part.get("text", "")).strip()
+            for part in parts
+            if part.get("text")
+        ).strip()
+        if not summary:
+            raise AgoraUpstreamError("Gemini vision returned no summary for the camera frame.")
+        return summary[:1200]
 
     async def interrupt_agent(self, agent_id: str, channel_name: str) -> None:
         session = self._require_session(agent_id, channel_name)

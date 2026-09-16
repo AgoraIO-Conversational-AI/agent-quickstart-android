@@ -89,6 +89,23 @@ class ConversationAgoraApi(
         )
     }
 
+    suspend fun sendVisualContext(
+        agentId: String,
+        channelName: String,
+        imageBase64: String,
+        question: String? = null,
+    ): String {
+        val body = service.visualContext(
+            request = VisualContextRequest(
+                agentId = agentId,
+                channelName = channelName,
+                imageBase64 = imageBase64,
+                question = question,
+            ),
+        ).requireBody()
+        return body.summary.requireValue("summary")
+    }
+
     suspend fun stopConversation(agentId: String, channelName: String) {
         service.leave(
             request = AgentActionRequest(agentId = agentId, channelName = channelName),
@@ -147,6 +164,9 @@ class ConversationAgoraApi(
         @POST("v1/conversation/think")
         suspend fun think(@Body request: TextActionRequest): Response<ActionResponse>
 
+        @POST("v1/conversation/visual-context")
+        suspend fun visualContext(@Body request: VisualContextRequest): Response<VisualContextResponse>
+
         @GET("health")
         suspend fun health(): Response<HealthResponse>
 
@@ -187,6 +207,19 @@ class ConversationAgoraApi(
         @SerializedName("on_thinking_action") val onThinkingAction: String?,
         @SerializedName("on_speaking_action") val onSpeakingAction: String?,
         val interruptable: Boolean = true,
+    )
+
+    private data class VisualContextRequest(
+        @SerializedName("agent_id") val agentId: String,
+        @SerializedName("channel_name") val channelName: String,
+        @SerializedName("image_base64") val imageBase64: String,
+        @SerializedName("mime_type") val mimeType: String = "image/jpeg",
+        val question: String? = null,
+    )
+
+    private data class VisualContextResponse(
+        val success: Boolean,
+        val summary: String? = null,
     )
 
     private data class JoinRequest(

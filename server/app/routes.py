@@ -22,6 +22,8 @@ from .schemas import (
     RefreshResponse,
     SpeakRequest,
     ThinkRequest,
+    VisualContextRequest,
+    VisualContextResponse,
 )
 from .security import build_rate_limiter
 from .session_store import SessionRecord, SessionStore
@@ -152,6 +154,35 @@ def create_router(settings: Settings, store: SessionStore, agora: AgoraClient) -
         await require_agent(store, body)
         await call_agora(agora.think(**body.model_dump()))
         return ActionResponse(success=True, message="Instruction accepted.")
+
+
+    @router.post("/v1/conversation/visual-context", response_model=VisualContextResponse, dependencies=throttled)
+    async def visual_context(body: VisualContextRequest) -> VisualContextResponse:
+        await require_agent(store, body)
+        summary = await call_agora(
+            agora.analyze_camera_frame(
+                image_base64=body.image_base64,
+                mime_type=body.mime_type,
+                question=body.question,
+            )
+        )
+        instruction = (
+            "Camera frame context for Live Lens. Use this visual summary as context for the next spoken turn. "
+            "Do not claim you directly received a live video stream; refer to it as the latest camera frame if needed. "
+            f"Summary: {summary}"
+        )
+        await call_agora(
+            agora.think(
+                agent_id=body.agent_id,
+                channel_name=body.channel_name,
+                text=instruction,
+                on_listening_action="inject",
+                on_thinking_action="append",
+                on_speaking_action="append",
+                interruptable=False,
+            )
+        )
+        return VisualContextResponse(success=True, summary=summary)
 
     @router.post(
         "/v1/conversation/refresh",

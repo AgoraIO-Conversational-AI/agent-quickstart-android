@@ -19,6 +19,7 @@ internal object ConversationUiStateMapper {
             isDarkTheme = isDarkTheme,
             isConfigured = QuickstartConfig.isConfigured,
             configMessage = QuickstartConfig.startupHelpMessage(),
+            cameraPermissionGranted = false,
             microphonePermissionGranted = permissionGranted,
             warningMessage = warningMessage,
             errorMessage = errorMessage,

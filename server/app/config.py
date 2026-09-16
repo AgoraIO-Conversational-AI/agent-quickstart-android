@@ -20,7 +20,12 @@ class Settings:
     agora_app_id: str
     agora_app_certificate: str
     asr_model: str = "nova-3"
-    llm_model: str = "gpt-4o-mini"
+    llm_model: str = "models/gemini-3.8-live"
+    gemini_api_key: str = ""
+    gemini_thinking_level: str = ""
+    gemini_voice: str = "Charon"
+    gemini_api_version: str = "v1beta"
+    gemini_vision_model: str = "models/gemini-3.8-flash"
     tts_model: str = "speech_2_6_turbo"
     tts_voice_id: str = "English_captivating_female1"
     agora_area: str = "NORTH_AMERICA"
@@ -42,7 +47,12 @@ class Settings:
             agora_app_id=os.getenv("AGORA_APP_ID", "").strip(),
             agora_app_certificate=os.getenv("AGORA_APP_CERTIFICATE", "").strip(),
             asr_model=os.getenv("ASR_MODEL", "nova-3"),
-            llm_model=os.getenv("LLM_MODEL", "gpt-4o-mini"),
+            llm_model=os.getenv("LLM_MODEL", "models/gemini-3.8-live"),
+            gemini_api_key=os.getenv("GEMINI_API_KEY", "").strip(),
+            gemini_thinking_level=os.getenv("GEMINI_THINKING_LEVEL", "").strip(),
+            gemini_voice=os.getenv("GEMINI_VOICE", "Charon").strip(),
+            gemini_api_version=os.getenv("GEMINI_API_VERSION", "v1beta").strip(),
+            gemini_vision_model=os.getenv("GEMINI_VISION_MODEL", "models/gemini-3.8-flash").strip(),
             tts_model=os.getenv("TTS_MODEL", "speech_2_6_turbo"),
             tts_voice_id=os.getenv("TTS_VOICE_ID", "English_captivating_female1"),
             agora_area=os.getenv("AGORA_AREA", "NORTH_AMERICA"),
@@ -72,6 +82,8 @@ class Settings:
         ]
         if missing:
             raise RuntimeError(f"Missing required server configuration: {', '.join(missing)}")
+        if self.llm_model.lower().startswith("gemini") and not self.gemini_api_key:
+            raise RuntimeError("Missing required server configuration: GEMINI_API_KEY is required for Gemini Live MLLM.")
         invalid = [
             name
             for name, value in (

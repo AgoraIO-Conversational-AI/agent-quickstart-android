@@ -16,6 +16,20 @@ class ConversationRepository(
         api.sendText(agentId, channelName, text, speak, append)
     }
 
+    suspend fun sendVisualContext(
+        agentId: String,
+        channelName: String,
+        imageBase64: String,
+        question: String? = null,
+    ): String {
+        return api.sendVisualContext(
+            agentId = agentId,
+            channelName = channelName,
+            imageBase64 = imageBase64,
+            question = question,
+        )
+    }
+
     suspend fun requestSessionBootstrap(): AgoraTokenBundle {
         return api.requestSessionBootstrap()
     }

@@ -13,6 +13,7 @@ class FakeAgoraClient:
     def __init__(self) -> None:
         self.join_calls = 0
         self.text_calls = []
+        self.vision_calls = []
 
     def create_user_tokens(self, channel_name: str, rtc_uid: int):
         return f"rtc-{channel_name}-{rtc_uid}", f"rtm-{rtc_uid}", 2_000_000_000
@@ -33,6 +34,10 @@ class FakeAgoraClient:
     async def think(self, **kwargs):
         self.text_calls.append(("think", kwargs))
 
+    async def analyze_camera_frame(self, **kwargs):
+        self.vision_calls.append(kwargs)
+        return "A development board is connected by USB on a wooden desk."
+
     async def close(self):
         return None
 
@@ -41,6 +46,7 @@ def settings() -> Settings:
     return Settings(
         agora_app_id="0" * 32,
         agora_app_certificate="1" * 32,
+        gemini_api_key="test-gemini-key",
     )
 
 
@@ -63,6 +69,7 @@ async def test_sdk_agent_configuration_creates_an_async_session():
     sdk_settings = Settings(
         agora_app_id="0" * 32,
         agora_app_certificate="1" * 32,
+        gemini_api_key="test-gemini-key",
     )
     async with httpx.AsyncClient() as http_client:
         agora = AgoraClient(sdk_settings, http_client=http_client)
@@ -75,14 +82,18 @@ async def test_sdk_agent_configuration_creates_an_async_session():
 
 
 @pytest.mark.asyncio
-async def test_join_serializes_current_turn_detection_and_required_asr_params():
+async def test_join_serializes_current_turn_detection_and_required_mllm_params():
     requests = []
 
     def handle(request):
         requests.append(request)
         return httpx.Response(200, json={"agent_id": "agent-1", "create_ts": 1_700_000_000})
 
-    sdk_settings = Settings(agora_app_id="0" * 32, agora_app_certificate="1" * 32)
+    sdk_settings = Settings(
+        agora_app_id="0" * 32,
+        agora_app_certificate="1" * 32,
+        gemini_api_key="test-gemini-key",
+    )
     async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as http_client:
         agora = AgoraClient(sdk_settings, http_client=http_client)
         await agora.join_agent(channel_name="room-a", requester_rtc_uid=42)
@@ -90,28 +101,25 @@ async def test_join_serializes_current_turn_detection_and_required_asr_params():
     payload = json.loads(requests[0].content)
     properties = payload["properties"]
     assert requests[0].url.path.endswith("/join")
-    # The SDK adds its own language field; deprecated detection controls must
-    # stay out of the top-level object.
-    assert not {"type", "threshold", "silence_duration_ms", "interrupt_mode"} & set(
-        properties["turn_detection"]
-    )
-    config = properties["turn_detection"]["config"]
-    assert config["start_of_speech"]["mode"] == "vad"
-    assert config["end_of_speech"]["mode"] == "vad"
-    assert properties["interruption"] == {"enable": True, "mode": "start_of_speech"}
-    assert properties["asr"]["vendor"] == "deepgram"
-    # Managed credentials resolve the model through an SDK-generated preset.
-    assert "deepgram_nova_3" in payload["preset"]
-    assert properties["asr"]["params"]["language"] == "en"
-    filler = properties["filler_words"]
-    assert filler["enable"] is True
-    assert filler["content"]["mode"] == "generated"
-    assert filler["content"]["generated_config"]["fallback_strategy"] == "static"
-    assert len(filler["content"]["static_config"]["phrases"]) >= 1
+    assert "turn_detection" not in properties
+    assert properties["mllm"]["vendor"] == "gemini"
+    assert properties["mllm"]["api_key"] == "test-gemini-key"
+    assert properties["mllm"]["input_modalities"] == ["audio"]
+    assert properties["mllm"]["output_modalities"] == ["audio"]
+    assert properties["mllm"]["params"]["model"] == "models/gemini-3.8-live"
+    assert properties["mllm"]["params"]["voice"] == "Charon"
+    assert properties["mllm"]["params"]["http_options"] == {"api_version": "v1beta"}
+    assert properties["mllm"]["params"]["transcribe_agent"] is True
+    assert properties["mllm"]["params"]["transcribe_user"] is True
+    assert properties["mllm"]["params"]["instructions"].startswith("You are Live Lens")
+    assert properties["mllm"]["turn_detection"]["mode"] == "agora_vad"
+    assert properties["mllm"]["turn_detection"]["agora_vad_config"]["threshold"] == 0.5
+    assert "filler_words" not in properties
+    assert "interruption" not in properties
 
 
 @pytest.mark.asyncio
-async def test_sdk_custom_tool_and_text_actions_reach_agora():
+async def test_sdk_text_actions_reach_agora_with_gemini_mllm():
     requests = []
 
     def handle(request):
@@ -120,6 +128,7 @@ async def test_sdk_custom_tool_and_text_actions_reach_agora():
 
     sdk_settings = Settings(
         agora_app_id="0" * 32, agora_app_certificate="1" * 32,
+        gemini_api_key="test-gemini-key",
         public_base_url="https://example.com",
     )
     async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as http_client:
@@ -129,10 +138,11 @@ async def test_sdk_custom_tool_and_text_actions_reach_agora():
         await agora.think("agent-1", "room-a", "Explain setup", "append", "append", "append", True)
 
     properties = json.loads(requests[0].content)["properties"]
-    assert properties["advanced_features"]["enable_tools"] is True
-    tool = properties["llm"]["tools"][0]
-    assert tool["function"]["name"] == "getProjectGuidance"
-    assert tool["server"]["url"] == "https://example.com/v1/tools/guidance?topic={{args.topic}}"
+    assert properties["mllm"]["vendor"] == "gemini"
+    assert properties["advanced_features"]["enable_rtm"] is True
+    assert properties["llm"] is None
+    assert properties["asr"] is None
+    assert properties["tts"] is None
     assert requests[1].url.path.endswith("/agents/agent-1/speak")
     assert json.loads(requests[1].content)["priority"] == "APPEND"
     assert requests[2].url.path.endswith("/agents/agent-1/think")
@@ -140,6 +150,35 @@ async def test_sdk_custom_tool_and_text_actions_reach_agora():
     assert instruction["text"] == "Explain setup"
     for state in ("listening", "thinking", "speaking"):
         assert instruction[f"on_{state}_action"] == "append"
+
+
+
+def test_visual_context_analyzes_frame_and_injects_agent_context():
+    fake = FakeAgoraClient()
+    with TestClient(create_app(settings(), fake)) as client:
+        session = client.post("/v1/conversation/bootstrap", json={"requester_rtc_uid": 42}).json()
+        join = client.post(
+            "/v1/conversation/join",
+            json={"channel_name": session["channel_name"], "requester_rtc_uid": 42},
+        ).json()
+        response = client.post(
+            "/v1/conversation/visual-context",
+            json={
+                "channel_name": session["channel_name"],
+                "agent_id": join["agent_id"],
+                "image_base64": "ZmFrZS1qcGVn",
+                "mime_type": "image/jpeg",
+                "question": "What board is this?",
+            },
+        )
+
+    assert response.status_code == 200
+    assert "development board" in response.json()["summary"]
+    assert fake.vision_calls[0]["image_base64"] == "ZmFrZS1qcGVn"
+    assert fake.vision_calls[0]["question"] == "What board is this?"
+    assert fake.text_calls[-1][0] == "think"
+    assert "Camera frame context" in fake.text_calls[-1][1]["text"]
+    assert fake.text_calls[-1][1]["on_listening_action"] == "inject"
 
 
 def test_guidance_restricts_topics_and_text_actions_validate_sessions_and_input():
@@ -168,6 +207,7 @@ async def test_sdk_client_rejects_an_unknown_area():
     sdk_settings = Settings(
         agora_app_id="0" * 32,
         agora_app_certificate="1" * 32,
+        gemini_api_key="test-gemini-key",
         agora_area="somewhere",
     )
     async with httpx.AsyncClient() as http_client:

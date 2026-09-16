@@ -60,6 +60,17 @@ class ThinkRequest(TextActionRequest):
     on_speaking_action: Literal["interrupt", "ignore", "append"] = "append"
 
 
+class VisualContextRequest(AgentActionRequest):
+    image_base64: str = Field(min_length=1, max_length=4_500_000)
+    mime_type: Literal["image/jpeg", "image/png", "image/webp"] = "image/jpeg"
+    question: str | None = Field(default=None, max_length=500)
+
+
+class VisualContextResponse(BaseModel):
+    success: bool
+    summary: str
+
+
 class RefreshRequest(BaseModel):
     channel_name: str = Field(min_length=1, max_length=64)
     requester_rtc_uid: int = Field(ge=1, le=2_147_483_647)

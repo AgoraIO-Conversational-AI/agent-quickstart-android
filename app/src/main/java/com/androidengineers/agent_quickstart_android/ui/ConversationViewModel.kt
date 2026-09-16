@@ -8,6 +8,7 @@ import com.androidengineers.agent_quickstart_android.config.QuickstartConfig
 import com.androidengineers.agent_quickstart_android.data.ConversationRepository
 import com.androidengineers.agent_quickstart_android.model.ConversationUiState
 import com.androidengineers.agent_quickstart_android.rtc.AgoraConversationSessionManager
+import io.agora.rtc2.RtcEngine
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,6 +24,7 @@ class ConversationViewModel(
     private val _uiState = MutableStateFlow(ConversationUiStateMapper.freshUiState())
 
     val uiState: StateFlow<ConversationUiState> = _uiState.asStateFlow()
+    val rtcEngineState: StateFlow<RtcEngine?> = sessionManager.rtcEngineState
 
     private var activeAgentId: String? = null
     private var themeInitialized: Boolean = false
@@ -39,6 +41,10 @@ class ConversationViewModel(
 
     fun updateMicrophonePermission(granted: Boolean) {
         _uiState.update { it.copy(microphonePermissionGranted = granted) }
+    }
+
+    fun updateCameraPermission(granted: Boolean) {
+        _uiState.update { it.copy(cameraPermissionGranted = granted) }
     }
 
     fun initializeTheme(systemDarkTheme: Boolean) {
@@ -64,14 +70,15 @@ class ConversationViewModel(
                 it.copy(
                     errorMessage = QuickstartConfig.startupHelpMessage(),
                     warningMessage = null,
+                visualContextStatus = null,
                 )
             }
             return
         }
-        if (!currentState.microphonePermissionGranted) {
+        if (!currentState.cameraPermissionGranted || !currentState.microphonePermissionGranted) {
             _uiState.update {
                 it.copy(
-                    errorMessage = "Microphone access is required to publish your voice to the Agora channel.",
+                    errorMessage = "Camera and microphone access are required to start Live Lens.",
                     warningMessage = null,
                 )
             }
@@ -115,14 +122,14 @@ class ConversationViewModel(
                     )
                 }
                 val inviteResult = inviteAttempt.getOrNull()
+                val inviteFailure = inviteAttempt.exceptionOrNull()
+                if (inviteFailure != null || inviteResult?.agentId == null) {
+                    val message = inviteFailure?.message
+                        ?: "The server returned no Agora agent ID."
+                    throw IllegalStateException("Gemini Live agent could not start: $message")
+                }
                 activeAgentId = inviteResult?.agentId
                 sessionManager.setActiveAgentId(activeAgentId)
-
-                val warning = inviteAttempt.exceptionOrNull()?.message?.let { message ->
-                    "The Android client joined the channel, but the server could not start the Agora agent: $message"
-                } ?: if (inviteResult?.agentId == null) {
-                    "The Android client joined the channel, but the server returned no Agora agent ID."
-                } else null
 
                 _uiState.update { current ->
                     ConversationUiStateMapper.mergeSession(
@@ -130,7 +137,7 @@ class ConversationViewModel(
                             isStarting = false,
                             inConversation = true,
                             canSendText = activeAgentId != null,
-                            warningMessage = warning,
+                            warningMessage = null,
                         ),
                         sessionManager.snapshot.value,
                     )
@@ -186,6 +193,41 @@ class ConversationViewModel(
         _uiState.update { it.copy(textDraft = text.take(2000), textActionStatus = null) }
     }
 
+    fun analyzeCameraFrame() {
+        val state = _uiState.value
+        val agentId = activeAgentId ?: return
+        val channel = sessionManager.snapshot.value.channelName ?: return
+        if (state.isAnalyzingVision || state.isStopping || !state.inConversation) return
+        _uiState.update {
+            it.copy(
+                isAnalyzingVision = true,
+                visualContextStatus = "Analyzing camera frame…",
+                errorMessage = null,
+            )
+        }
+        viewModelScope.launch {
+            val result = runCatching {
+                val imageBase64 = sessionManager.captureLocalCameraFrameBase64()
+                repository.sendVisualContext(
+                    agentId = agentId,
+                    channelName = channel,
+                    imageBase64 = imageBase64,
+                    question = _uiState.value.liveTranscript?.text?.takeIf { it.isNotBlank() },
+                )
+            }
+            if (activeAgentId != agentId) return@launch
+            _uiState.update {
+                it.copy(
+                    isAnalyzingVision = false,
+                    visualContextStatus = result.getOrNull()?.let { summary ->
+                        "Camera context added: ${summary.take(96)}${if (summary.length > 96) "…" else ""}"
+                    },
+                    errorMessage = result.exceptionOrNull()?.message,
+                )
+            }
+        }
+    }
+
     fun sendText(speak: Boolean, append: Boolean) {
         val state = _uiState.value
         val agentId = activeAgentId ?: return
@@ -201,6 +243,7 @@ class ConversationViewModel(
                 it.copy(
                     isSendingText = false,
                     textDraft = if (result.isSuccess && it.textDraft == state.textDraft) "" else it.textDraft,
+                    visualContextStatus = null,
                     textActionStatus = if (result.isSuccess) {
                         if (speak) "Speech request accepted" else "Instruction accepted"
                     } else null,

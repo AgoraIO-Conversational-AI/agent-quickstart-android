@@ -3,10 +3,12 @@
 ## Prerequisites
 
 - Android Studio with JDK 17+
-- An Android device or emulator with microphone support
+- An Android physical device with camera and microphone access
 - [Agora CLI](https://github.com/AgoraIO/cli)
 - Python 3.10+
-- A development tunnel provider such as Cloudflare Tunnel, ngrok, Tailscale Funnel, or LocalTunnel
+- A Google Gemini API key with access to the configured Live and vision models
+- Android platform-tools (`adb`) for the easiest physical-device flow
+- Optional: a development tunnel provider such as Cloudflare Tunnel, ngrok, Tailscale Funnel, or LocalTunnel
 
 ## Recommended Setup
 
@@ -23,15 +25,37 @@ source server/.venv/bin/activate
 pip install -r server/requirements-dev.txt
 cp -n server/.env.example server/.env.local
 agora project env write server/.env.local
+```
+
+Add your Gemini key to `server/.env.local`:
+
+```properties
+GEMINI_API_KEY=your_google_gemini_api_key
+LLM_MODEL=models/gemini-3.8-live
+GEMINI_VISION_MODEL=models/gemini-3.8-flash
+```
+
+Start the backend:
+
+```bash
 ./server/run.sh
 ```
 
-In another terminal, start a tunnel, configure Android with its public HTTPS URL, and build:
+In another terminal, configure Android for a USB-connected device and build:
+
+```bash
+adb reverse tcp:8000 tcp:8000
+cat > local.properties <<'EOF'
+QUICKSTART_SERVER_URL=http://127.0.0.1:8000
+EOF
+JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew :app:assembleDebug
+```
+
+If you cannot use `adb reverse`, start a tunnel instead and configure Android with its public HTTPS URL:
 
 ```bash
 ./server/tunnel.sh --provider ngrok
 ./server/configure-android.sh https://your-public-host
-JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew :app:assembleDebug
 ```
 
 `agora init` clones this starter, selects or creates an Agora project, and writes `.agora/project.json`. Agora credentials remain in `server/.env.local`.
@@ -53,9 +77,9 @@ agora project doctor --deep
 ./server/run.sh
 ```
 
-In another terminal, run `./server/tunnel.sh --provider <provider>`, use `./server/configure-android.sh` to write the public URL to root `local.properties`, then build the app.
+In another terminal, use `adb reverse tcp:8000 tcp:8000`, write `QUICKSTART_SERVER_URL=http://127.0.0.1:8000` to root `local.properties`, then build the app.
 
-The helper supports `cloudflare`, `ngrok`, `tailscale`, and `localtunnel`. [Local HTTPS tunnels](local-tunnels.md) documents the requirements and direct commands for each provider.
+If you cannot use USB/adb reverse, run `./server/tunnel.sh --provider <provider>` and `./server/configure-android.sh https://your-public-host` instead. The helper supports `cloudflare`, `ngrok`, `tailscale`, and `localtunnel`. [Local HTTPS tunnels](local-tunnels.md) documents the requirements and direct commands for each provider.
 
 ## Manual Setup
 
@@ -80,21 +104,24 @@ cd agent-quickstart-android
 
 ### 3. Add Server Config
 
-Put Agora credentials in `server/.env.local`:
+Put server-only credentials in `server/.env.local`:
 
 ```properties
 AGORA_APP_ID=your_agora_app_id
 AGORA_APP_CERTIFICATE=your_agora_app_certificate
 AGORA_AGENT_UID=123456
+LLM_MODEL=models/gemini-3.8-live
+GEMINI_API_KEY=your_google_gemini_api_key
+GEMINI_VISION_MODEL=models/gemini-3.8-flash
 ```
 
-After starting the local HTTP server and public HTTPS tunnel, put only this value in root `local.properties`:
+For a USB-connected physical device, put only this value in root `local.properties`:
 
 ```properties
-QUICKSTART_SERVER_URL=https://your-public-host
+QUICKSTART_SERVER_URL=http://127.0.0.1:8000
 ```
 
-If the tunnel assigns a new URL, run `server/configure-android.sh` again and rebuild or reinstall the Android app because these values are compiled into `BuildConfig`.
+Then run `adb reverse tcp:8000 tcp:8000`. If you use a tunnel, set `QUICKSTART_SERVER_URL=https://your-public-host` instead. If the URL changes, rebuild or reinstall the Android app because this value is compiled into `BuildConfig`.
 
 ### 4. Build And Run
 
@@ -102,9 +129,9 @@ If the tunnel assigns a new URL, run `server/configure-android.sh` again and reb
 JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew :app:assembleDebug
 ```
 
-Open the project in Android Studio, or run it from the command line, then launch it on a device or emulator.
+Open the project in Android Studio, or install from the command line, then launch it on a physical device.
 
-Tap **Start voice session**, allow microphone permission, speak to the agent, and watch transcripts appear in realtime. Use the end-session control to stop the conversation cleanly.
+Tap **Start Live Session**, allow camera and microphone permissions, point the rear camera at your workspace, and speak to the agent. The app refreshes camera context periodically; tap the eye button to refresh visual context immediately. Use the end-session control to stop cleanly.
 
 ## Required Configuration
 
@@ -116,32 +143,28 @@ Required in `server/.env.local`:
 
 - `AGORA_APP_ID`
 - `AGORA_APP_CERTIFICATE`
+- `GEMINI_API_KEY`
 
 `AGORA_AREA` selects the Agora API routing region. Supported values are `NORTH_AMERICA`, `US`, `EUROPE`, `EU`, `ASIA_PACIFIC`, `AP`, `CHINA`, and `CN`.
 
 ## Default Agent Setup
 
-The demo starts the agent with the default Agora-managed stack:
-
-- `deepgram_nova_3`
-- `openai_gpt_4o_mini`
-- `minimax_speech_2_6_turbo`
+The demo starts an Agora Conversational AI agent with Gemini Live MLLM for realtime audio conversation. Camera understanding is implemented separately: the Android app captures periodic camera snapshots, the backend summarizes them with Gemini Vision, and that summary is injected into the active Agora agent as context.
 
 It also enables:
 
 - RTM event delivery
-- RTM data channel transcripts
-- RTM pipeline metrics
+- RTM data channel transcripts and agent state
 - agent subscription scoped to the generated requester RTC UID
 - chorus audio scenario for the agent and local RTC engine
-- explicit VAD turn detection and speech-triggered interruption
-- generated filler phrases after 1.5 seconds, with static fallback phrases
+- Agora VAD turn detection for Gemini Live
+- rear-camera default, manual camera switch, torch, zoom, and visual-context refresh
 
-## Text Controls And Project Guidance
+## Text Controls And Visual Context
 
-During a session, use **Send text to Ada**:
+During a session, text controls can send instructions or speech through the backend:
 
-- **Ask Ada** sends an instruction for the LLM to process.
+- **Ask Live Lens** sends an instruction for the agent to process.
 - **Read aloud** sends text directly to speech synthesis.
 - **Queue instead of interrupting** defaults to enabled. For instructions, the
   `append` action starts a new turn after the current turn's LLM output finishes;
@@ -153,19 +176,9 @@ These controls use the Python backend's `/v1/conversation/think` and
 `/v1/conversation/speak` endpoints. RTC/RTM still carries audio and agent events.
 The Android Client Toolkit is not required by this implementation.
 
-To let Ada look up this project's setup and troubleshooting guidance, set
-`PUBLIC_BASE_URL=https://your-public-host` in `server/.env.local` and restart the
-server. Use the same reachable HTTPS backend base URL configured for Android.
-Update it and restart after changing tunnel URLs. Start a new conversation to
-apply agent configuration changes.
+The camera path uses `POST /v1/conversation/visual-context`. Android sends a base64 JPEG snapshot; the backend calls Gemini Vision and injects the visual summary into the active Agora agent with `/think`. No Gemini key is sent to Android.
 
-The `getProjectGuidance` tool calls `GET /v1/tools/guidance?topic=setup` or
-`topic=troubleshooting`. It serves only these two public project documents;
-include the repository's `docs` directory when deploying the server. When
-`PUBLIC_BASE_URL` is empty, no custom tool is advertised to the agent.
-
-The server pins `agora-agents==2.8.1`. After pulling the update, install
-`server/requirements-dev.txt` in a Python 3.10+ environment and restart the server.
+The server pins `agora-agents==2.9.0`. After pulling updates, install `server/requirements-dev.txt` in a Python 3.10+ environment and restart the server.
 
 ## Production Security
 

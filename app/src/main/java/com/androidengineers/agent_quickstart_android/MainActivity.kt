@@ -32,41 +32,61 @@ class MainActivity : ComponentActivity() {
             val systemDarkTheme = isSystemInDarkTheme()
 
             LaunchedEffect(systemDarkTheme) {
-                viewModel.initializeTheme(systemDarkTheme)
+                viewModel.initializeTheme(false)
             }
 
             AgentquickstartandroidTheme(darkTheme = uiState.isDarkTheme) {
                 val context = LocalContext.current
+                val rtcEngine by viewModel.rtcEngineState.collectAsStateWithLifecycle()
                 val currentViewModel by rememberUpdatedState(viewModel)
                 val permissionLauncher = rememberLauncherForActivityResult(
-                    contract = ActivityResultContracts.RequestPermission()
-                ) { granted ->
-                    currentViewModel.updateMicrophonePermission(granted)
-                    if (granted) {
+                    contract = ActivityResultContracts.RequestMultiplePermissions()
+                ) { grants ->
+                    val cameraGranted = grants[Manifest.permission.CAMERA] == true
+                    val microphoneGranted = grants[Manifest.permission.RECORD_AUDIO] == true
+                    currentViewModel.updateCameraPermission(cameraGranted)
+                    currentViewModel.updateMicrophonePermission(microphoneGranted)
+                    if (cameraGranted && microphoneGranted) {
                         currentViewModel.startConversation()
                     }
                 }
 
                 LaunchedEffect(Unit) {
-                    val granted = ContextCompat.checkSelfPermission(
+                    val cameraGranted = ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.CAMERA
+                    ) == PackageManager.PERMISSION_GRANTED
+                    val microphoneGranted = ContextCompat.checkSelfPermission(
                         context,
                         Manifest.permission.RECORD_AUDIO
                     ) == PackageManager.PERMISSION_GRANTED
-                    currentViewModel.updateMicrophonePermission(granted)
+                    currentViewModel.updateCameraPermission(cameraGranted)
+                    currentViewModel.updateMicrophonePermission(microphoneGranted)
                 }
 
                 ConversationScreen(
                     uiState = uiState,
+                    rtcEngine = rtcEngine,
                     onStartRequested = {
-                        val granted = ContextCompat.checkSelfPermission(
+                        val cameraGranted = ContextCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.CAMERA
+                        ) == PackageManager.PERMISSION_GRANTED
+                        val microphoneGranted = ContextCompat.checkSelfPermission(
                             context,
                             Manifest.permission.RECORD_AUDIO
                         ) == PackageManager.PERMISSION_GRANTED
-                        currentViewModel.updateMicrophonePermission(granted)
-                        if (granted) {
+                        currentViewModel.updateCameraPermission(cameraGranted)
+                        currentViewModel.updateMicrophonePermission(microphoneGranted)
+                        if (cameraGranted && microphoneGranted) {
                             currentViewModel.startConversation()
                         } else {
-                            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                            permissionLauncher.launch(
+                                arrayOf(
+                                    Manifest.permission.CAMERA,
+                                    Manifest.permission.RECORD_AUDIO,
+                                )
+                            )
                         }
                     },
                     onEndConversation = viewModel::endConversation,
@@ -75,6 +95,7 @@ class MainActivity : ComponentActivity() {
                     onDismissMessages = viewModel::clearTransientMessages,
                     onTextChanged = viewModel::updateTextDraft,
                     onSendText = viewModel::sendText,
+                    onAnalyzeCameraFrame = viewModel::analyzeCameraFrame,
                 )
             }
         }

@@ -117,7 +117,7 @@ sequenceDiagram
     participant M as Agora RTM
     participant G as Agent Runtime
 
-    U->>A: Tap Start voice session
+    U->>A: Tap Start Live Session
     A->>S: POST /bootstrap
     S-->>A: App ID + RTC/RTM tokens
     A->>S: POST /join with requester RTC UID

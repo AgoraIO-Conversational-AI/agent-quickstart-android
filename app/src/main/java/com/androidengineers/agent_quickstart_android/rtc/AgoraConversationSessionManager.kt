@@ -1,6 +1,7 @@
 package com.androidengineers.agent_quickstart_android.rtc
 
 import android.content.Context
+import android.util.Base64
 import android.util.Log
 import com.androidengineers.agent_quickstart_android.audio.AudioSessionManager
 import com.androidengineers.agent_quickstart_android.data.ConversationRepository
@@ -14,6 +15,8 @@ import io.agora.rtc2.Constants
 import io.agora.rtc2.IRtcEngineEventHandler
 import io.agora.rtc2.RtcEngine
 import io.agora.rtc2.RtcEngineConfig
+import io.agora.rtc2.video.CameraCapturerConfiguration
+import io.agora.rtc2.video.VideoEncoderConfiguration
 import io.agora.rtm.ErrorInfo
 import io.agora.rtm.LinkStateEvent
 import io.agora.rtm.MessageEvent
@@ -24,6 +27,7 @@ import io.agora.rtm.RtmConfig
 import io.agora.rtm.RtmConstants
 import io.agora.rtm.RtmEventListener
 import io.agora.rtm.SubscribeOptions
+import java.io.File
 import java.io.IOException
 import java.util.Locale
 import java.util.concurrent.CancellationException
@@ -63,8 +67,10 @@ class AgoraConversationSessionManager(
         addIssue(source = source, code = code, message = message)
     }
     private val _snapshot = MutableStateFlow(SessionSnapshot())
+    private val _rtcEngineState = MutableStateFlow<RtcEngine?>(null)
 
     val snapshot: StateFlow<SessionSnapshot> = _snapshot.asStateFlow()
+    val rtcEngineState: StateFlow<RtcEngine?> = _rtcEngineState.asStateFlow()
 
     private var rtcEngine: RtcEngine? = null
     private var rtmClient: RtmClient? = null
@@ -74,6 +80,7 @@ class AgoraConversationSessionManager(
     private var micRequestedEnabled: Boolean = true
     private var renewTokensProvider: (suspend (String, Int, String) -> RenewalTokens)? = null
     private var joinDeferred: CompletableDeferred<Int>? = null
+    private var snapshotDeferred: CompletableDeferred<File>? = null
     private var activeAgentId: String? = null
     private var currentRtmUserId: String? = null
     private var currentAgentTurnId: Long? = null
@@ -168,9 +175,11 @@ class AgoraConversationSessionManager(
         rtmClient = null
 
         rtcEngine?.let { engine ->
+            runCatching { engine.stopPreview() }
             runCatching { engine.leaveChannel() }
         }
         rtcEngine = null
+        _rtcEngineState.value = null
         runCatching { RtcEngine.destroy() }
 
         if (resetSnapshot) {
@@ -187,6 +196,41 @@ class AgoraConversationSessionManager(
         micRequestedEnabled = enabled
         audioSessionManager.setMicrophoneEnabled(enabled)
         syncMicState()
+    }
+
+
+    suspend fun captureLocalCameraFrameBase64(): String {
+        val engine = rtcEngine ?: throw IOException("RTC engine is not initialized.")
+        if (currentChannel == null || localRtcUid == 0) {
+            throw IOException("RTC channel is not ready for camera capture.")
+        }
+        if (snapshotDeferred != null) {
+            throw IOException("A camera frame is already being analyzed.")
+        }
+        val snapshotFile = File(
+            appContext.cacheDir,
+            "live_lens_snapshot_${System.currentTimeMillis()}.jpg",
+        )
+        val deferred = CompletableDeferred<File>()
+        snapshotDeferred = deferred
+        val result = withContext(Dispatchers.Main.immediate) {
+            engine.takeSnapshot(0, snapshotFile.absolutePath)
+        }
+        if (result != Constants.ERR_OK) {
+            snapshotDeferred = null
+            throw IOException("Camera snapshot failed (${RtcEngine.getErrorDescription(result)}).")
+        }
+        return try {
+            val file = withTimeout(5_000L) { deferred.await() }
+            Base64.encodeToString(file.readBytes(), Base64.NO_WRAP)
+        } catch (error: TimeoutCancellationException) {
+            if (snapshotDeferred == deferred) {
+                snapshotDeferred = null
+            }
+            throw IOException("Camera snapshot timed out.", error)
+        } finally {
+            snapshotFile.delete()
+        }
     }
 
     fun setActiveAgentId(agentId: String?) {
@@ -215,6 +259,28 @@ class AgoraConversationSessionManager(
             operation = "enableAudio",
             result = engine.enableAudio(),
         )
+        checkRtcResult(
+            operation = "enableVideo",
+            result = engine.enableVideo(),
+        )
+        runRtcBestEffort(
+            operation = "startRearCameraCapture",
+            result = engine.startCameraCapture(
+                Constants.VideoSourceType.VIDEO_SOURCE_CAMERA_PRIMARY,
+                CameraCapturerConfiguration(CameraCapturerConfiguration.CAMERA_DIRECTION.CAMERA_REAR),
+            ),
+        )
+        runRtcBestEffort(
+            operation = "setVideoEncoderConfiguration",
+            result = engine.setVideoEncoderConfiguration(
+                VideoEncoderConfiguration(
+                    VideoEncoderConfiguration.VD_640x480,
+                    VideoEncoderConfiguration.FRAME_RATE.FRAME_RATE_FPS_15,
+                    VideoEncoderConfiguration.STANDARD_BITRATE,
+                    VideoEncoderConfiguration.ORIENTATION_MODE.ORIENTATION_MODE_ADAPTIVE,
+                )
+            ),
+        )
         runRtcBestEffort(
             operation = "setDefaultAudioRoutetoSpeakerphone",
             result = engine.setDefaultAudioRoutetoSpeakerphone(true),
@@ -228,6 +294,7 @@ class AgoraConversationSessionManager(
         )
         audioSessionManager.configureRtcEngine(engine)
         rtcEngine = engine
+        _rtcEngineState.value = engine
     }
 
     private suspend fun ensureRtmClient(
@@ -273,17 +340,19 @@ class AgoraConversationSessionManager(
                     channelProfile = Constants.CHANNEL_PROFILE_COMMUNICATION
                     clientRoleType = Constants.CLIENT_ROLE_BROADCASTER
                     publishMicrophoneTrack = true
+                    publishCameraTrack = true
                     publishCustomAudioTrack = false
                     autoSubscribeAudio = true
                     autoSubscribeVideo = false
                     enableAudioRecordingOrPlayout = true
+                    startPreview = true
                 }
             )
         }
 
         Log.i(
             TAG,
-            "rtc_publish_config native_mic_track_active=true custom_audio_track_active=false"
+            "rtc_publish_config native_mic_track_active=true camera_track_active=true custom_audio_track_active=false"
         )
 
         if (result != Constants.ERR_OK) {
@@ -683,6 +752,19 @@ class AgoraConversationSessionManager(
                 code = errorCode.toString(),
                 message = "Agora RTC error: ${RtcEngine.getErrorDescription(errorCode)}",
             )
+        }
+
+
+        override fun onSnapshotTaken(uid: Int, filePath: String, width: Int, height: Int, errCode: Int) {
+            val deferred = snapshotDeferred ?: return
+            snapshotDeferred = null
+            if (errCode == Constants.ERR_OK) {
+                deferred.complete(File(filePath))
+            } else {
+                deferred.completeExceptionally(
+                    IOException("Camera snapshot failed (${RtcEngine.getErrorDescription(errCode)}).")
+                )
+            }
         }
 
         override fun onTokenPrivilegeWillExpire(token: String) {
