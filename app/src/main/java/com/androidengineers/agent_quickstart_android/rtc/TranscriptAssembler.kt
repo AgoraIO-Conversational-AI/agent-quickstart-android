@@ -3,6 +3,9 @@ package com.androidengineers.agent_quickstart_android.rtc
 import com.androidengineers.agent_quickstart_android.model.TranscriptSpeaker
 import com.androidengineers.agent_quickstart_android.model.TranscriptTurn
 import com.androidengineers.agent_quickstart_android.model.TranscriptTurnStatus
+import io.agora.conversational.api.Transcript
+import io.agora.conversational.api.TranscriptStatus
+import io.agora.conversational.api.TranscriptType
 import org.json.JSONObject
 
 data class TranscriptPayload(
@@ -69,6 +72,32 @@ class TranscriptAssembler {
         return snapshot()
     }
 
+    fun handleTranscript(
+        transcript: Transcript,
+        agentUserId: String,
+        localRtcUid: Int,
+    ): List<TranscriptTurn> {
+        val speaker = when (transcript.type) {
+            TranscriptType.USER -> TranscriptSpeaker.USER
+            TranscriptType.AGENT -> TranscriptSpeaker.AGENT
+        }
+        val speakerKey = when {
+            transcript.userId.isNotBlank() -> transcript.userId
+            speaker == TranscriptSpeaker.USER -> localRtcUid.toString()
+            else -> agentUserId.ifBlank { "agent" }
+        }
+        upsertTranscription(
+            key = "$speakerKey:${transcript.turnId}:-1",
+            turnId = transcript.turnId,
+            streamId = null,
+            speaker = speaker,
+            text = transcript.text,
+            status = transcript.status.toTurnStatus(),
+            sentAtMillis = System.currentTimeMillis(),
+        )
+        return snapshot()
+    }
+
     fun snapshot(): List<TranscriptTurn> {
         return turns.sortedWith(
             compareBy<TranscriptTurn> { it.createdAtMillis }
@@ -91,10 +120,32 @@ class TranscriptAssembler {
             "agent"
         }
         val key = "$speakerKey:$turnId:${streamId ?: -1L}"
-        val normalizedText = normalizeTranscriptSpacing(payload.text)
         val createdAt = normalizeTimestampMs(
             payload.sentAtMillis ?: System.currentTimeMillis()
         )
+
+        upsertTranscription(
+            key = key,
+            turnId = turnId,
+            streamId = streamId,
+            speaker = speaker,
+            text = payload.text,
+            status = status,
+            sentAtMillis = createdAt,
+        )
+    }
+
+    private fun upsertTranscription(
+        key: String,
+        turnId: Long,
+        streamId: Long?,
+        speaker: TranscriptSpeaker,
+        text: String,
+        status: TranscriptTurnStatus,
+        sentAtMillis: Long,
+    ) {
+        val normalizedText = normalizeTranscriptSpacing(text)
+        val createdAt = normalizeTimestampMs(sentAtMillis)
         val existingIndex = turns.indexOfFirst { it.key == key }
 
         if (existingIndex == -1) {
@@ -136,6 +187,16 @@ class TranscriptAssembler {
             0 -> TranscriptTurnStatus.IN_PROGRESS
             2 -> TranscriptTurnStatus.INTERRUPTED
             else -> TranscriptTurnStatus.END
+        }
+    }
+
+    private fun TranscriptStatus.toTurnStatus(): TranscriptTurnStatus {
+        return when (this) {
+            TranscriptStatus.IN_PROGRESS -> TranscriptTurnStatus.IN_PROGRESS
+            TranscriptStatus.INTERRUPTED -> TranscriptTurnStatus.INTERRUPTED
+            TranscriptStatus.END,
+            TranscriptStatus.UNKNOWN,
+            -> TranscriptTurnStatus.END
         }
     }
 

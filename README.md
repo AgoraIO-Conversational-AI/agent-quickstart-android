@@ -19,6 +19,27 @@ This release integrates the Conversational AI Engine's v2.12 features with
 `agora-agents==2.8.1` on the Python backend. Android uses RTC `4.6.4` and RTM
 `2.3.0`. Engine, Python SDK, and Android SDK versions are independent.
 
+## Kotlin Toolkit Demo Branch
+
+This branch demonstrates the standalone
+[`agent-client-toolkit-kotlin`](https://github.com/AgoraIO-Conversational-AI/agent-client-toolkit-kotlin)
+library in the Android quickstart. The backend still owns secure token
+generation and agent start/stop, while the app gives its logged-in RTC/RTM
+instances to `ConversationalAIAPIImpl` for realtime client behavior.
+
+The main integration point is
+`app/src/main/java/com/androidengineers/agent_quickstart_android/rtc/AgoraConversationSessionManager.kt`.
+It now uses the toolkit to:
+
+- subscribe to RTM transcript, state, error, receipt, and latency callbacks
+- apply `AUDIO_SCENARIO_AI_CLIENT` before joining the RTC channel
+- send text-box actions through toolkit `speak` and `think`
+- send barge-in interrupts through toolkit `interrupt`
+- surface toolkit metrics in the connected session details
+
+The toolkit artifact requires Android `minSdk 26`, so this branch raises the
+app minimum SDK from 24 to 26.
+
 See [the changelog](CHANGELOG.md) for the changes and [setup instructions](docs/setup.md#text-controls-and-project-guidance)
 for the new text controls and optional custom tool. Each developer runs their
 own backend and configures its HTTPS URL before building the Android app.
@@ -205,4 +226,4 @@ JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradle
 
 ## Security Note
 
-`AGORA_APP_CERTIFICATE` stays in `server/.env.local` and is never compiled into Android. The Python server generates the Android user's RTC/RTM token and uses the Agora Python SDK to start, interrupt, and stop the agent. A development tunnel URL is public while the tunnel is running, so stop the tunnel when testing is complete and add appropriate application authentication before adapting this demo for production.
+`AGORA_APP_CERTIFICATE` stays in `server/.env.local` and is never compiled into Android. The Python server generates the Android user's RTC/RTM token and uses the Agora Python SDK to start and stop the agent. The Android app uses the Kotlin client toolkit over RTM for realtime transcripts, text controls, metrics, and interruption. A development tunnel URL is public while the tunnel is running, so stop the tunnel when testing is complete and add appropriate application authentication before adapting this demo for production.

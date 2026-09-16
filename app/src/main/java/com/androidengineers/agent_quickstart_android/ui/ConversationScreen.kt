@@ -973,6 +973,7 @@ private fun connectedInfoItems(uiState: ConversationUiState): List<InfoItemModel
         InfoItemModel("Channel", uiState.channelName ?: "Joining..."),
         InfoItemModel("Local UID", uiState.localUid ?: "Pending"),
         InfoItemModel("RTM status", uiState.rtmConnectionLabel),
+        InfoItemModel("Toolkit metrics", uiState.toolkitMetrics.firstOrNull()?.let { "${it.label}: ${it.value}" } ?: "Pending"),
         InfoItemModel("Backend latency", uiState.backendLatencyMs?.let { "$it ms" } ?: "Pending"),
         InfoItemModel("Last server response", uiState.lastServerResponse ?: "Pending"),
     )

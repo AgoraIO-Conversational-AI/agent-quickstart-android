@@ -35,7 +35,7 @@ android {
 
     defaultConfig {
         applicationId = "com.androidengineers.agent_quickstart_android"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 36
         versionCode = 2
         versionName = "1.1.0"
@@ -84,6 +84,7 @@ android {
 dependencies {
     implementation(libs.agora.rtc)
     implementation(libs.agora.rtm)
+    implementation(libs.agora.agent.toolkit)
     implementation(libs.retrofit)
     implementation(libs.retrofit.converter.gson)
     implementation(libs.androidx.core.ktx)

@@ -116,7 +116,6 @@ class ConversationViewModel(
                 }
                 val inviteResult = inviteAttempt.getOrNull()
                 activeAgentId = inviteResult?.agentId
-                sessionManager.setActiveAgentId(activeAgentId)
 
                 val warning = inviteAttempt.exceptionOrNull()?.message?.let { message ->
                     "The Android client joined the channel, but the server could not start the Agora agent: $message"
@@ -168,7 +167,6 @@ class ConversationViewModel(
             }
 
             activeAgentId = null
-            sessionManager.setActiveAgentId(null)
             sessionManager.disconnect(resetSnapshot = true)
             _uiState.value = ConversationUiStateMapper.freshUiState(
                 permissionGranted = _uiState.value.microphonePermissionGranted,
@@ -189,12 +187,17 @@ class ConversationViewModel(
     fun sendText(speak: Boolean, append: Boolean) {
         val state = _uiState.value
         val agentId = activeAgentId ?: return
-        val channel = sessionManager.snapshot.value.channelName ?: return
         val text = state.textDraft.trim()
         if (text.isEmpty() || state.isSendingText || state.isStopping || !state.inConversation) return
         _uiState.update { it.copy(isSendingText = true, textActionStatus = null) }
         viewModelScope.launch {
-            val result = runCatching { repository.sendText(agentId, channel, text, speak, append) }
+            val result = runCatching {
+                sessionManager.sendText(
+                    text = text,
+                    speak = speak,
+                    append = append,
+                )
+            }
             // A reply from an ended session must not modify a newly started one.
             if (activeAgentId != agentId) return@launch
             _uiState.update {

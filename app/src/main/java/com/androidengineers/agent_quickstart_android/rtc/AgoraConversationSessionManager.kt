@@ -3,12 +3,39 @@ package com.androidengineers.agent_quickstart_android.rtc
 import android.content.Context
 import android.util.Log
 import com.androidengineers.agent_quickstart_android.audio.AudioSessionManager
-import com.androidengineers.agent_quickstart_android.data.ConversationRepository
 import com.androidengineers.agent_quickstart_android.model.AgentConversationState
 import com.androidengineers.agent_quickstart_android.model.AgoraTokenBundle
 import com.androidengineers.agent_quickstart_android.model.RenewalTokens
 import com.androidengineers.agent_quickstart_android.model.SessionIssue
+import com.androidengineers.agent_quickstart_android.model.SessionMetric
 import com.androidengineers.agent_quickstart_android.model.SessionSnapshot
+import io.agora.conversational.api.AgentManualEosEvent
+import io.agora.conversational.api.AgentState
+import io.agora.conversational.api.ConversationalAIAPIConfig
+import io.agora.conversational.api.ConversationalAIAPIError
+import io.agora.conversational.api.ConversationalAIAPIImpl
+import io.agora.conversational.api.IConversationalAIAPI
+import io.agora.conversational.api.IConversationalAIAPIEventHandler
+import io.agora.conversational.api.InterruptEvent
+import io.agora.conversational.api.MessageError
+import io.agora.conversational.api.MessageReceipt
+import io.agora.conversational.api.Metric
+import io.agora.conversational.api.ModuleError
+import io.agora.conversational.api.Priority
+import io.agora.conversational.api.SpeakMessage
+import io.agora.conversational.api.StateChangeEvent
+import io.agora.conversational.api.ThinkListeningAction
+import io.agora.conversational.api.ThinkMessage
+import io.agora.conversational.api.ThinkSpeakingAction
+import io.agora.conversational.api.ThinkThinkingAction
+import io.agora.conversational.api.Transcript
+import io.agora.conversational.api.TranscriptRenderMode
+import io.agora.conversational.api.TranscriptStatus
+import io.agora.conversational.api.TranscriptType
+import io.agora.conversational.api.Turn
+import io.agora.conversational.api.UserManualEosEvent
+import io.agora.conversational.api.UserManualSosEvent
+import io.agora.conversational.api.VoiceprintStateChangeEvent
 import io.agora.rtc2.ChannelMediaOptions
 import io.agora.rtc2.Constants
 import io.agora.rtc2.IRtcEngineEventHandler
@@ -16,14 +43,11 @@ import io.agora.rtc2.RtcEngine
 import io.agora.rtc2.RtcEngineConfig
 import io.agora.rtm.ErrorInfo
 import io.agora.rtm.LinkStateEvent
-import io.agora.rtm.MessageEvent
-import io.agora.rtm.PresenceEvent
 import io.agora.rtm.ResultCallback
 import io.agora.rtm.RtmClient
 import io.agora.rtm.RtmConfig
 import io.agora.rtm.RtmConstants
 import io.agora.rtm.RtmEventListener
-import io.agora.rtm.SubscribeOptions
 import java.io.IOException
 import java.util.Locale
 import java.util.concurrent.CancellationException
@@ -46,7 +70,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
-import org.json.JSONObject
 
 class AgoraConversationSessionManager(
     context: Context,
@@ -56,7 +79,6 @@ class AgoraConversationSessionManager(
     private val scope = CoroutineScope(sessionJob + Dispatchers.Main.immediate)
     private val renewMutex = Mutex()
     private val transcriptAssembler = TranscriptAssembler()
-    private val repository = ConversationRepository()
     private val audioSessionManager = AudioSessionManager(
         context = appContext,
     ) { source, code, message ->
@@ -68,17 +90,21 @@ class AgoraConversationSessionManager(
 
     private var rtcEngine: RtcEngine? = null
     private var rtmClient: RtmClient? = null
+    private var conversationalApi: IConversationalAIAPI? = null
     private var currentChannel: String? = null
     private var localRtcUid: Int = 0
     private var currentAgentRtcUid: Int = 0
+    private var currentAgentUserId: String? = null
     private var micRequestedEnabled: Boolean = true
     private var renewTokensProvider: (suspend (String, Int, String) -> RenewalTokens)? = null
     private var joinDeferred: CompletableDeferred<Int>? = null
-    private var activeAgentId: String? = null
     private var currentRtmUserId: String? = null
     private var currentAgentTurnId: Long? = null
     private var interruptRequestedTurnId: Long? = null
     private var lastInterruptRequestAtMs: Long = 0L
+    private var agentListening: Boolean = false
+    private var agentThinking: Boolean = false
+    private var agentSpeaking: Boolean = false
 
     init {
         scope.launch {
@@ -106,14 +132,15 @@ class AgoraConversationSessionManager(
         disconnect(resetSnapshot = true)
         currentChannel = bootstrap.channel
         currentAgentRtcUid = bootstrap.agentRtcUid
+        currentAgentUserId = bootstrap.agentRtcUid.takeIf { it > 0 }?.toString()
         renewTokensProvider = onRenewTokens
         transcriptAssembler.reset()
         micRequestedEnabled = true
-        activeAgentId = null
         currentRtmUserId = bootstrap.rtmUserId
         currentAgentTurnId = null
         interruptRequestedTurnId = null
         lastInterruptRequestAtMs = 0L
+        resetAgentActivity()
         _snapshot.value = SessionSnapshot(
             channelName = bootstrap.channel,
             micEnabled = currentMicEnabled(),
@@ -129,6 +156,8 @@ class AgoraConversationSessionManager(
                 channel = bootstrap.channel,
                 userId = bootstrap.rtmUserId,
             )
+            ensureConversationalApi()
+            subscribeToolkitMessages(bootstrap.channel)
             joinRtcChannel(bootstrap)
             audioSessionManager.start()
             audioSessionManager.setMicrophoneEnabled(micRequestedEnabled)
@@ -145,24 +174,29 @@ class AgoraConversationSessionManager(
         renewTokensProvider = null
         localRtcUid = 0
         currentAgentRtcUid = 0
+        currentAgentUserId = null
         micRequestedEnabled = true
-        activeAgentId = null
         currentRtmUserId = null
         currentAgentTurnId = null
         interruptRequestedTurnId = null
         lastInterruptRequestAtMs = 0L
+        resetAgentActivity()
         audioSessionManager.stop()
 
         val channel = currentChannel
         currentChannel = null
 
+        conversationalApi?.let { api ->
+            if (!channel.isNullOrBlank()) {
+                runCatching { api.unsubscribeMessage(channel, noopConversationalCallback()) }
+            }
+            runCatching { api.removeHandler(conversationalEventHandler) }
+            runCatching { api.destroy() }
+        }
+        conversationalApi = null
+
         rtmClient?.let { client ->
             runCatching { client.removeEventListener(rtmEventListener) }
-            if (!channel.isNullOrBlank()) {
-                runCatching {
-                    client.unsubscribe(channel, noopRtmCallback())
-                }
-            }
             runCatching { client.logout(noopRtmCallback()) }
         }
         rtmClient = null
@@ -189,8 +223,45 @@ class AgoraConversationSessionManager(
         syncMicState()
     }
 
-    fun setActiveAgentId(agentId: String?) {
-        activeAgentId = agentId
+    suspend fun sendText(
+        text: String,
+        speak: Boolean,
+        append: Boolean,
+    ) {
+        val api = conversationalApi ?: throw IOException("Conversational AI toolkit is not initialized.")
+        val agentUserId = currentAgentUserId ?: throw IOException("Agent RTM user ID is not available yet.")
+        if (speak) {
+            awaitConversationalAction { completion ->
+                api.speak(
+                    agentUserId,
+                    SpeakMessage(
+                        text = text,
+                        priority = if (append) Priority.APPEND else Priority.INTERRUPT,
+                        interruptable = true,
+                    ),
+                    completion,
+                )
+            }
+        } else {
+            val action = if (append) {
+                ToolkitThinkAction.APPEND
+            } else {
+                ToolkitThinkAction.INTERRUPT
+            }
+            awaitConversationalAction { completion ->
+                api.think(
+                    agentUserId,
+                    ThinkMessage(
+                        text = text,
+                        onListeningAction = action.listening,
+                        onThinkingAction = action.thinking,
+                        onSpeakingAction = action.speaking,
+                        interruptable = true,
+                    ),
+                    completion,
+                )
+            }
+        }
     }
 
     private suspend fun ensureRtcEngine(appId: String) = withContext(Dispatchers.Main.immediate) {
@@ -203,7 +274,7 @@ class AgoraConversationSessionManager(
             mAppId = appId
             mEventHandler = rtcEventHandler
             mChannelProfile = Constants.CHANNEL_PROFILE_COMMUNICATION
-            mAudioScenario = Constants.AUDIO_SCENARIO_CHORUS
+            mAudioScenario = Constants.AUDIO_SCENARIO_AI_CLIENT
         }
 
         val engine = RtcEngine.create(config)
@@ -223,7 +294,7 @@ class AgoraConversationSessionManager(
             operation = "setAudioProfile",
             result = engine.setAudioProfile(
                 Constants.AUDIO_PROFILE_SPEECH_STANDARD,
-                Constants.AUDIO_SCENARIO_CHORUS,
+                Constants.AUDIO_SCENARIO_AI_CLIENT,
             ),
         )
         audioSessionManager.configureRtcEngine(engine)
@@ -245,16 +316,37 @@ class AgoraConversationSessionManager(
 
         try {
             awaitRtmVoid { callback -> client.login(token, callback) }
-            val subscribeOptions = SubscribeOptions().apply {
-                setWithMessage(true)
-                setWithPresence(true)
-            }
-            awaitRtmVoid { callback -> client.subscribe(channel, subscribeOptions, callback) }
             rtmClient = client
         } catch (error: Throwable) {
             runCatching { client.removeEventListener(rtmEventListener) }
             runCatching { client.logout(noopRtmCallback()) }
             throw error
+        }
+    }
+
+    private fun ensureConversationalApi() {
+        if (conversationalApi != null) {
+            return
+        }
+        val engine = rtcEngine ?: throw IllegalStateException("RTC engine is not initialized.")
+        val client = rtmClient ?: throw IllegalStateException("RTM client is not initialized.")
+        conversationalApi = ConversationalAIAPIImpl(
+            ConversationalAIAPIConfig(
+                rtcEngine = engine,
+                rtmClient = client,
+                renderMode = TranscriptRenderMode.Word,
+                enableLog = true,
+                enableRenderModeFallback = true,
+            )
+        ).also { api ->
+            api.addHandler(conversationalEventHandler)
+        }
+    }
+
+    private suspend fun subscribeToolkitMessages(channel: String) {
+        val api = conversationalApi ?: throw IllegalStateException("Conversational AI toolkit is not initialized.")
+        awaitConversationalAction { completion ->
+            api.subscribeMessage(channel, completion)
         }
     }
 
@@ -265,6 +357,10 @@ class AgoraConversationSessionManager(
         joinDeferred = deferred
 
         val result = withContext(Dispatchers.Main.immediate) {
+            conversationalApi?.loadAudioSettings(
+                Constants.AUDIO_SCENARIO_AI_CLIENT,
+                enableAins = false,
+            )
             engine.joinChannel(
                 bootstrap.rtcToken,
                 bootstrap.channel,
@@ -351,11 +447,26 @@ class AgoraConversationSessionManager(
         }
     }
 
-    private fun updateTranscript(payload: JSONObject) {
+    private fun updateTranscript(transcript: Transcript, agentUserId: String) {
+        updateSnapshot { current ->
+            current.copy(
+                transcriptTurns = transcriptAssembler.handleTranscript(
+                    transcript = transcript,
+                    agentUserId = agentUserId,
+                    localRtcUid = localRtcUid,
+                )
+            )
+        }
+    }
+
+    private fun markAgentInterrupted(turnId: Long?) {
         updateSnapshot { current ->
             current.copy(
                 transcriptTurns = transcriptAssembler.handlePayload(
-                    payload = payload,
+                    payload = TranscriptPayload(
+                        objectType = "message.interrupt",
+                        turnId = turnId,
+                    ),
                     localRtcUid = localRtcUid,
                 )
             )
@@ -449,84 +560,6 @@ class AgoraConversationSessionManager(
         }
     }
 
-    private fun handleRtmMessage(event: MessageEvent) {
-        val rawPayload = when (val data = event.getMessage().getData()) {
-            is String -> data
-            is ByteArray -> data.toString(Charsets.UTF_8)
-            else -> data?.toString()
-        } ?: return
-
-        val payload = runCatching { JSONObject(rawPayload) }.getOrNull() ?: return
-        when (payload.optString("object")) {
-            "user.transcription" -> {
-                val text = payload.optString("text")
-                val agentSpeaking = _snapshot.value.agentState == AgentConversationState.SPEAKING
-
-                if (audioSessionManager.shouldAcceptUserTranscript(text)) {
-                    val isFinal = payload.takeIf { payload.has("final") }?.optBoolean("final") != false
-
-                    audioSessionManager.onUserTranscriptAccepted(
-                        interruptingAgent = agentSpeaking,
-                        isFinal = isFinal,
-                    )
-
-                    if (agentSpeaking) {
-                        requestAgentInterruptFromUserSpeech(text)
-                    }
-
-                    updateTranscript(payload)
-                } else {
-                    Log.i(TAG, "Discarded self-speech transcript.")
-                }
-            }
-
-            "assistant.transcription" -> {
-                audioSessionManager.onAssistantTranscript(payload.optString("text"))
-                updateTranscript(payload)
-            }
-
-            "message.interrupt" -> updateTranscript(payload)
-
-            "message.state" -> updateAgentState(
-                rawState = payload.optString("state"),
-                turnId = payload.optionalLong("turn_id"),
-                timestampMillis = normalizeTimestampMs(
-                    payload.optionalLong("send_ts") ?: System.currentTimeMillis()
-                ),
-            )
-
-            "message.error" -> addIssue(
-                source = "rtm-signaling",
-                code = payload.opt("code")?.toString() ?: "unknown",
-                message = "${payload.optString("module").ifBlank { "unknown" }}: " +
-                    payload.optString("message").ifBlank { "Unknown signaling error." },
-                timestampMillis = normalizeTimestampMs(
-                    payload.optionalLong("send_ts") ?: System.currentTimeMillis()
-                ),
-            )
-
-            "message.sal_status" -> addIssue(
-                source = "rtm-signaling",
-                code = payload.optString("status").ifBlank { "unknown" },
-                message = "SAL status: ${payload.optString("status").ifBlank { "unknown" }}",
-                timestampMillis = normalizeTimestampMs(
-                    payload.optionalLong("timestamp") ?: System.currentTimeMillis()
-                ),
-            )
-        }
-    }
-
-    private fun handlePresenceEvent(event: PresenceEvent) {
-        val stateItems = event.getStateItems()
-        val state = stateItems["state"] ?: return
-        val turnId = stateItems["turn_id"]?.toLongOrNull()
-        updateAgentState(
-            rawState = state,
-            turnId = turnId,
-            timestampMillis = normalizeTimestampMs(event.getTimestamp()),
-        )
-    }
-
     private fun String.toAgentConversationState(): AgentConversationState {
         return when (lowercase(Locale.ROOT)) {
             "idle" -> AgentConversationState.IDLE
@@ -538,24 +571,12 @@ class AgoraConversationSessionManager(
         }
     }
 
-    private fun normalizeTimestampMs(timestamp: Long): Long {
-        return if (timestamp > 1_000_000_000_000L) timestamp else timestamp * 1000L
-    }
-
-    private fun JSONObject.optionalLong(key: String): Long? {
-        return when (val value = opt(key)) {
-            is Number -> value.toLong()
-            is String -> value.toLongOrNull()
-            else -> null
-        }
-    }
-
     private fun requestAgentInterruptFromUserSpeech(text: String) {
         if (text.isBlank()) {
             return
         }
-        val agentId = activeAgentId ?: return
-        val channelName = currentChannel ?: return
+        val agentUserId = currentAgentUserId ?: return
+        val api = conversationalApi ?: return
         if (_snapshot.value.agentState != AgentConversationState.SPEAKING) {
             return
         }
@@ -574,14 +595,13 @@ class AgoraConversationSessionManager(
         lastInterruptRequestAtMs = now
         scope.launch {
             runCatching {
-                repository.interruptConversation(
-                    agentId = agentId,
-                    channelName = channelName,
-                )
+                awaitConversationalAction { completion ->
+                    api.interrupt(agentUserId, completion)
+                }
             }.onSuccess {
                 Log.i(
                     TAG,
-                    "interrupt_event_sent agentId=$agentId reason=user-transcription turnId=${turnId ?: "none"}"
+                    "interrupt_event_sent agentUserId=$agentUserId reason=user-transcription turnId=${turnId ?: "none"}"
                 )
             }.onFailure { error ->
                 addIssue(
@@ -590,6 +610,77 @@ class AgoraConversationSessionManager(
                     message = error.message ?: "Failed to interrupt the cloud agent.",
                 )
             }
+        }
+    }
+
+    private fun handleToolkitTranscript(agentUserId: String, transcript: Transcript) {
+        when (transcript.type) {
+            TranscriptType.USER -> {
+                val agentSpeaking = _snapshot.value.agentState == AgentConversationState.SPEAKING
+                if (audioSessionManager.shouldAcceptUserTranscript(transcript.text)) {
+                    audioSessionManager.onUserTranscriptAccepted(
+                        interruptingAgent = agentSpeaking,
+                        isFinal = transcript.status != TranscriptStatus.IN_PROGRESS,
+                    )
+                    if (agentSpeaking) {
+                        requestAgentInterruptFromUserSpeech(transcript.text)
+                    }
+                    updateTranscript(transcript, agentUserId)
+                } else {
+                    Log.i(TAG, "Discarded self-speech transcript.")
+                }
+            }
+
+            TranscriptType.AGENT -> {
+                audioSessionManager.onAssistantTranscript(transcript.text)
+                updateTranscript(transcript, agentUserId)
+            }
+        }
+    }
+
+    private fun updateIndependentAgentState(
+        listening: Boolean? = null,
+        thinking: Boolean? = null,
+        speaking: Boolean? = null,
+    ) {
+        listening?.let { agentListening = it }
+        thinking?.let { agentThinking = it }
+        speaking?.let { agentSpeaking = it }
+
+        val state = when {
+            agentSpeaking -> AgentState.SPEAKING
+            agentThinking -> AgentState.THINKING
+            agentListening -> AgentState.LISTENING
+            else -> AgentState.IDLE
+        }
+        updateAgentState(
+            rawState = state.value,
+            turnId = currentAgentTurnId,
+        )
+    }
+
+    private fun resetAgentActivity() {
+        agentListening = false
+        agentThinking = false
+        agentSpeaking = false
+    }
+
+    private fun addMetric(metric: SessionMetric) {
+        updateSnapshot { current ->
+            current.copy(
+                metrics = buildList {
+                    add(metric)
+                    addAll(current.metrics)
+                }.take(4)
+            )
+        }
+    }
+
+    private fun formatMetricValue(value: Double): String {
+        return if (value % 1.0 == 0.0) {
+            "${value.toLong()} ms"
+        } else {
+            String.format(Locale.US, "%.1f ms", value)
         }
     }
 
@@ -621,6 +712,25 @@ class AgoraConversationSessionManager(
         return object : ResultCallback<Void> {
             override fun onSuccess(result: Void?) = Unit
             override fun onFailure(errorInfo: ErrorInfo) = Unit
+        }
+    }
+
+    private fun noopConversationalCallback(): (ConversationalAIAPIError?) -> Unit = {}
+
+    private suspend fun awaitConversationalAction(
+        block: ((ConversationalAIAPIError?) -> Unit) -> Unit,
+    ) = suspendCancellableCoroutine<Unit> { continuation ->
+        block { error ->
+            if (!continuation.isActive) {
+                return@block
+            }
+            if (error == null) {
+                continuation.resume(Unit)
+            } else {
+                continuation.resumeWithException(
+                    IOException("${error.errorCode}: ${error.errorMessage}")
+                )
+            }
         }
     }
 
@@ -691,14 +801,6 @@ class AgoraConversationSessionManager(
     }
 
     private val rtmEventListener = object : RtmEventListener {
-        override fun onMessageEvent(event: MessageEvent) {
-            handleRtmMessage(event)
-        }
-
-        override fun onPresenceEvent(event: PresenceEvent) {
-            handlePresenceEvent(event)
-        }
-
         override fun onLinkStateEvent(event: LinkStateEvent) {
             updateSnapshot {
                 it.copy(
@@ -720,9 +822,138 @@ class AgoraConversationSessionManager(
         }
     }
 
+    private val conversationalEventHandler = object : IConversationalAIAPIEventHandler {
+        override fun onAgentStateChanged(agentUserId: String, event: StateChangeEvent) {
+            currentAgentUserId = agentUserId
+            updateAgentState(
+                rawState = event.state.value,
+                turnId = event.turnId,
+                timestampMillis = event.timestamp,
+            )
+        }
+
+        override fun onAgentListeningChanged(agentUserId: String, isListening: Boolean) {
+            currentAgentUserId = agentUserId
+            updateIndependentAgentState(listening = isListening)
+        }
+
+        override fun onAgentThinkingChanged(agentUserId: String, isThinking: Boolean) {
+            currentAgentUserId = agentUserId
+            updateIndependentAgentState(thinking = isThinking)
+        }
+
+        override fun onAgentSpeakingChanged(agentUserId: String, isSpeaking: Boolean) {
+            currentAgentUserId = agentUserId
+            updateIndependentAgentState(speaking = isSpeaking)
+        }
+
+        override fun onAgentInterrupted(agentUserId: String, event: InterruptEvent) {
+            currentAgentUserId = agentUserId
+            markAgentInterrupted(event.turnId)
+        }
+
+        override fun onAgentMetrics(agentUserId: String, metric: Metric) {
+            currentAgentUserId = agentUserId
+            addMetric(
+                SessionMetric(
+                    label = "${metric.type.value}.${metric.name}",
+                    value = formatMetricValue(metric.value),
+                    timestampMillis = metric.timestamp,
+                )
+            )
+        }
+
+        override fun onTurnFinished(agentUserId: String, turn: Turn) {
+            currentAgentUserId = agentUserId
+            addMetric(
+                SessionMetric(
+                    label = "turn ${turn.turnId} e2e",
+                    value = formatMetricValue(turn.e2eLatency),
+                    timestampMillis = turn.timestamp,
+                )
+            )
+        }
+
+        override fun onAgentError(agentUserId: String, error: ModuleError) {
+            currentAgentUserId = agentUserId
+            addIssue(
+                source = "toolkit-${error.type.value}",
+                code = error.code.toString(),
+                message = error.message.ifBlank { "Agent module error." },
+                timestampMillis = error.timestamp,
+            )
+        }
+
+        override fun onMessageError(agentUserId: String, error: MessageError) {
+            currentAgentUserId = agentUserId
+            addIssue(
+                source = "toolkit-message",
+                code = error.code.toString(),
+                message = "${error.chatMessageType.value}: ${error.message}",
+                timestampMillis = error.timestamp,
+            )
+        }
+
+        override fun onMessageReceiptUpdated(agentUserId: String, receipt: MessageReceipt) {
+            currentAgentUserId = agentUserId
+            Log.d(TAG, "toolkit_message_receipt agentUserId=$agentUserId type=${receipt.type.value} turnId=${receipt.turnId}")
+        }
+
+        override fun onAgentVoiceprintStateChanged(agentUserId: String, event: VoiceprintStateChangeEvent) {
+            currentAgentUserId = agentUserId
+            addIssue(
+                source = "toolkit-voiceprint",
+                code = event.status.value,
+                message = "Voiceprint status: ${event.status.value}",
+                timestampMillis = event.timestamp,
+            )
+        }
+
+        override fun onUserManualSosEvent(agentUserId: String, event: UserManualSosEvent) {
+            currentAgentUserId = agentUserId
+            Log.d(TAG, "toolkit_manual_sos agentUserId=$agentUserId success=${event.payload.success}")
+        }
+
+        override fun onUserManualEosEvent(agentUserId: String, event: UserManualEosEvent) {
+            currentAgentUserId = agentUserId
+            Log.d(TAG, "toolkit_manual_eos agentUserId=$agentUserId success=${event.payload.success}")
+        }
+
+        override fun onAgentManualEosEvent(agentUserId: String, event: AgentManualEosEvent) {
+            currentAgentUserId = agentUserId
+            Log.d(TAG, "toolkit_agent_manual_eos agentUserId=$agentUserId reason=${event.payload.reason}")
+        }
+
+        override fun onTranscriptUpdated(agentUserId: String, transcript: Transcript) {
+            currentAgentUserId = agentUserId
+            handleToolkitTranscript(agentUserId, transcript)
+        }
+
+        override fun onDebugLog(log: String) {
+            Log.v(TAG, log)
+        }
+    }
+
     companion object {
         private const val TAG = "AgoraConversationSession"
         private const val RTC_JOIN_TIMEOUT_MS = 20_000L
+    }
+
+    private enum class ToolkitThinkAction(
+        val listening: ThinkListeningAction,
+        val thinking: ThinkThinkingAction,
+        val speaking: ThinkSpeakingAction,
+    ) {
+        INTERRUPT(
+            listening = ThinkListeningAction.INTERRUPT,
+            thinking = ThinkThinkingAction.INTERRUPT,
+            speaking = ThinkSpeakingAction.INTERRUPT,
+        ),
+        APPEND(
+            listening = ThinkListeningAction.APPEND,
+            thinking = ThinkThinkingAction.APPEND,
+            speaking = ThinkSpeakingAction.APPEND,
+        ),
     }
 
     private fun checkRtcResult(

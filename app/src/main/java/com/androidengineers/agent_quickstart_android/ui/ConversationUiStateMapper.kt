@@ -52,6 +52,7 @@ internal object ConversationUiStateMapper {
             micAutoMuted = snapshot.micAutoMuted,
             transcriptHistory = history,
             liveTranscript = liveTranscript,
+            toolkitMetrics = snapshot.metrics,
             issues = snapshot.issues,
             inConversation = currentState.inConversation || snapshot.channelName != null,
         )

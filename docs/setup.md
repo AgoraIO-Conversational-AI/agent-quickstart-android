@@ -133,7 +133,7 @@ It also enables:
 - RTM data channel transcripts
 - RTM pipeline metrics
 - agent subscription scoped to the generated requester RTC UID
-- chorus audio scenario for the agent and local RTC engine
+- `AUDIO_SCENARIO_AI_CLIENT` for the local RTC engine through the Kotlin toolkit
 - explicit VAD turn detection and speech-triggered interruption
 - generated filler phrases after 1.5 seconds, with static fallback phrases
 
@@ -149,9 +149,9 @@ During a session, use **Send text to Ada**:
   direct speech, `APPEND` queues after current speech. Clear the checkbox to
   interrupt immediately.
 
-These controls use the Python backend's `/v1/conversation/think` and
-`/v1/conversation/speak` endpoints. RTC/RTM still carries audio and agent events.
-The Android Client Toolkit is not required by this implementation.
+These controls use the Kotlin client toolkit's RTM `think` and `speak` helpers
+to publish directly to the live agent user. The Python backend still starts and
+stops the agent and keeps token generation off the Android device.
 
 To let Ada look up this project's setup and troubleshooting guidance, set
 `PUBLIC_BASE_URL=https://your-public-host` in `server/.env.local` and restart the

@@ -50,6 +50,12 @@ data class SessionIssue(
     val timestampMillis: Long,
 )
 
+data class SessionMetric(
+    val label: String,
+    val value: String,
+    val timestampMillis: Long,
+)
+
 data class AgoraTokenBundle(
     val appId: String,
     val agentRtcUid: Int,
@@ -97,6 +103,7 @@ data class SessionSnapshot(
     val ttsQueueSize: Int = 0,
     val lastVadResult: String? = null,
     val lastBargeInEvent: String? = null,
+    val metrics: List<SessionMetric> = emptyList(),
     val issues: List<SessionIssue> = emptyList(),
 )
 
@@ -127,6 +134,7 @@ data class ConversationUiState(
     val warningMessage: String? = null,
     val errorMessage: String? = null,
     val backendLatencyMs: Long? = null,
+    val toolkitMetrics: List<SessionMetric> = emptyList(),
     val lastServerResponse: String? = null,
     val issues: List<SessionIssue> = emptyList(),
 )

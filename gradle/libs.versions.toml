@@ -2,6 +2,7 @@
 agp = "9.1.1"
 agoraRtc = "4.6.4"
 agoraRtm = "2.3.0"
+agoraAgentToolkit = "2.10.1"
 coreKtx = "1.18.0"
 junit = "4.13.2"
 junitVersion = "1.3.0"
@@ -18,6 +19,7 @@ robolectric = "4.14.1"
 [libraries]
 agora-rtc = { group = "io.agora.rtc", name = "full-sdk", version.ref = "agoraRtc" }
 agora-rtm = { group = "io.agora.rtm", name = "rtm-sdk-lite", version.ref = "agoraRtm" }
+agora-agent-toolkit = { group = "io.agora.agents", name = "agora-agent-client-toolkit", version.ref = "agoraAgentToolkit" }
 retrofit = { group = "com.squareup.retrofit2", name = "retrofit", version.ref = "retrofit" }
 retrofit-converter-gson = { group = "com.squareup.retrofit2", name = "converter-gson", version.ref = "retrofit" }
 okhttp-mockwebserver = { group = "com.squareup.okhttp3", name = "mockwebserver", version.ref = "okhttp" }
