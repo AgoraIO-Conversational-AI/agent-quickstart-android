@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import secrets
 import time
+from functools import cached_property
 from typing import Any
 
 import httpx
@@ -44,13 +45,19 @@ class AgoraClient:
         if area_name not in AREA_BY_NAME:
             supported = ", ".join(sorted(AREA_BY_NAME))
             raise ValueError(f"Unsupported AGORA_AREA '{settings.agora_area}'. Use one of: {supported}.")
-        self._client = AsyncAgora(
-            area=AREA_BY_NAME[area_name],
-            app_id=settings.agora_app_id,
-            app_certificate=settings.agora_app_certificate,
+        self._area = AREA_BY_NAME[area_name]
+        self._sessions: dict[str, tuple[str, Any]] = {}
+
+    @cached_property
+    def _client(self) -> AsyncAgora:
+        # Built on first use: SDK v3 rejects a missing App Certificate at construction,
+        # so deferring lets Settings.validate() report misconfiguration at startup first.
+        return AsyncAgora(
+            area=self._area,
+            app_id=self.settings.agora_app_id,
+            app_certificate=self.settings.agora_app_certificate,
             httpx_client=self._http,
         )
-        self._sessions: dict[str, tuple[str, Any]] = {}
 
     def create_user_tokens(self, channel_name: str, rtc_uid: int) -> tuple[str, str, int]:
         token = generate_convo_ai_token(
