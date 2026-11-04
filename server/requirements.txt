@@ -1,4 +1,6 @@
-agora-agents==2.8.1
+# Pre-release build: 2.13.0 plus generate_client_token (AgoraIO/agora-agents-python PR 120).
+# Switch back to a PyPI version pin once that change is released.
+agora-agents @ https://github.com/AgoraIO/agora-agents-python/archive/fec8c209c96e8f50f74e3d193194b6cbb3cd7d95.zip
 fastapi>=0.115.0,<1.0.0
 httpx>=0.27.0,<1.0.0
 python-dotenv>=1.0.0,<2.0.0
