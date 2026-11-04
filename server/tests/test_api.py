@@ -230,3 +230,46 @@ def test_full_conversation_contract_and_idempotent_join():
             "requester_rtc_uid": 42,
             "requester_rtm_user_id": "42",
         }).status_code == 404
+
+
+def _token_services(token: str) -> dict[int, str]:
+    """Map AccessToken2 service type -> account (RTC = 1, RTM = 2, ConvoAI = 9)."""
+    import base64
+    import struct
+    import zlib
+
+    assert token.startswith("007")
+    data = zlib.decompress(base64.b64decode(token[3:]))
+    offset = 0
+
+    def u16() -> int:
+        nonlocal offset
+        offset += 2
+        return struct.unpack_from("<H", data, offset - 2)[0]
+
+    def raw() -> bytes:
+        nonlocal offset
+        size = u16()
+        offset += size
+        return data[offset - size:offset]
+
+    raw()  # signature (binary)
+    raw()  # app ID
+    offset += 12  # issued, expiry, salt
+    services = {}
+    for _ in range(u16()):
+        service_type = u16()
+        privileges = u16()
+        offset += 6 * privileges  # uint16 key + uint32 expiry each
+        if service_type == 1:
+            raw()  # channel
+        services[service_type] = raw().decode() if service_type in (1, 2) else ""
+    return services
+
+
+def test_user_tokens_are_rtc_and_rtm_only():
+    client = AgoraClient(settings())
+    rtc_token, rtm_token, _ = client.create_user_tokens("demo-channel", 4321)
+    assert rtc_token == rtm_token
+    # The app token must not carry the ConvoAI service (9), which authenticates REST calls.
+    assert _token_services(rtc_token) == {1: "4321", 2: "4321"}
