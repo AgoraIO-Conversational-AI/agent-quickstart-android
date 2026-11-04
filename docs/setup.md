@@ -164,7 +164,8 @@ The `getProjectGuidance` tool calls `GET /v1/tools/guidance?topic=setup` or
 include the repository's `docs` directory when deploying the server. When
 `PUBLIC_BASE_URL` is empty, no custom tool is advertised to the agent.
 
-The server pins `agora-agents==3.0.0a3`. After pulling the update, install
+The server pins a pre-release build of `agora-agents` 3.0.0a3 that adds
+`generate_client_token`, installed from a GitHub commit archive until it reaches PyPI. After pulling the update, install
 `server/requirements-dev.txt` in a Python 3.10+ environment and restart the server.
 
 ## Production Security

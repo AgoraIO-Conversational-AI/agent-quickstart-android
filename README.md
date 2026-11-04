@@ -16,7 +16,9 @@ It gives you a Kotlin + Jetpack Compose app backed by a small Python service tha
 ## Release 1.1.0 — Agora Conversational AI v2.12
 
 This release integrates the Conversational AI Engine's v2.12 features with
-`agora-agents==3.0.0a3` on the Python backend. Android uses RTC `4.6.4` and RTM
+the Agents SDK v3 preview on the Python backend (a pre-release build of
+`agora-agents` 3.0.0a3 that adds `generate_client_token`, pinned by commit until it
+reaches PyPI). Android uses RTC `4.6.4` and RTM
 `2.3.0`. Engine, Python SDK, and Android SDK versions are independent.
 
 See [the changelog](CHANGELOG.md) for the changes and [setup instructions](docs/setup.md#text-controls-and-project-guidance)
@@ -205,4 +207,4 @@ JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradle
 
 ## Security Note
 
-`AGORA_APP_CERTIFICATE` stays in `server/.env.local` and is never compiled into Android. The Python server generates the Android user's RTC/RTM token and uses the Agora Python SDK to start, interrupt, and stop the agent. A development tunnel URL is public while the tunnel is running, so stop the tunnel when testing is complete and add appropriate application authentication before adapting this demo for production.
+`AGORA_APP_CERTIFICATE` stays in `server/.env.local` and is never compiled into Android. The Python server generates the Android user's RTC/RTM token with `generate_client_token`, which carries no Conversational AI service, so the app cannot call the Conversational AI REST API with it. The server uses the Agora Python SDK to start, interrupt, and stop the agent. A development tunnel URL is public while the tunnel is running, so stop the tunnel when testing is complete and add appropriate application authentication before adapting this demo for production.
