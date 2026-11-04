@@ -16,7 +16,7 @@ It gives you a Kotlin + Jetpack Compose app backed by a small Python service tha
 ## Release 1.1.0 — Agora Conversational AI v2.12
 
 This release integrates the Conversational AI Engine's v2.12 features with
-`agora-agents==2.8.1` on the Python backend. Android uses RTC `4.6.4` and RTM
+the Python backend, which pins a pre-release build of `agora-agents` 2.13.0 that adds `generate_client_token`, installed from a GitHub commit archive until it reaches PyPI. Android uses RTC `4.6.4` and RTM
 `2.3.0`. Engine, Python SDK, and Android SDK versions are independent.
 
 See [the changelog](CHANGELOG.md) for the changes and [setup instructions](docs/setup.md#text-controls-and-project-guidance)

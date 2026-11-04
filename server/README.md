@@ -2,7 +2,7 @@
 
 This FastAPI service keeps the Agora App Certificate and Conversational AI REST calls off the Android device. It exposes bootstrap, join, interrupt, leave, refresh, speak, think, project guidance, and health endpoints on `http://127.0.0.1:8000` by default. The tunnel provider terminates public HTTPS.
 
-Version 1.1.0 pins `agora-agents==2.8.1` and adds Conversational AI v2.12 features.
+Version 1.1.0 added Conversational AI v2.12 features. The server now pins a pre-release build of `agora-agents` 2.13.0 that adds `generate_client_token`, installed from a GitHub commit archive until it reaches PyPI; the app's token comes from `generate_client_token` (RTC + RTM only, no Conversational AI service).
 See [text controls and project guidance](../docs/setup.md#text-controls-and-project-guidance)
 for behavior and configuration. Invalid credential lengths are rejected at startup.
 
