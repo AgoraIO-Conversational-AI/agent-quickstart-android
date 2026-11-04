@@ -7,7 +7,7 @@ from typing import Any
 
 import httpx
 from agora_agent import Agent, Area, AsyncAgora, DeepgramSTT, MiniMaxTTS, OpenAI
-from agora_agent.agentkit import generate_convo_ai_token
+from agora_agent.agentkit import generate_client_token
 from agora_agent.core.api_error import ApiError
 
 from .config import Settings
@@ -60,7 +60,9 @@ class AgoraClient:
         )
 
     def create_user_tokens(self, channel_name: str, rtc_uid: int) -> tuple[str, str, int]:
-        token = generate_convo_ai_token(
+        # One RTC + RTM token serves as both the app's RTC and RTM token. It has no
+        # ConvoAI service, so the app cannot call the Conversational AI REST API with it.
+        token = generate_client_token(
             app_id=self.settings.agora_app_id,
             app_certificate=self.settings.agora_app_certificate,
             channel_name=channel_name,
