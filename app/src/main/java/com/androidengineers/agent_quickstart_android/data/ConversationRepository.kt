@@ -8,6 +8,8 @@ import com.androidengineers.agent_quickstart_android.model.RenewalTokens
 class ConversationRepository(
     private val api: ConversationAgoraApi = ConversationAgoraApi(),
 ) {
+    suspend fun requireOnDeviceBackend() = api.requireOnDeviceBackend()
+
     suspend fun checkHealth(): BackendHealthResult {
         return api.checkHealth()
     }
@@ -23,10 +25,12 @@ class ConversationRepository(
     suspend fun inviteAgent(
         channelName: String,
         requesterRtcUid: String,
+        documentToken: String? = null,
     ): AgentInviteResult {
         return api.inviteAgent(
             channelName = channelName,
             requesterRtcUid = requesterRtcUid,
+            documentToken = documentToken,
         )
     }
 

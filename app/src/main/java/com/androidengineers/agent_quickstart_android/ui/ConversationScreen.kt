@@ -110,6 +110,9 @@ fun ConversationScreen(
     onDismissMessages: () -> Unit,
     onTextChanged: (String) -> Unit = {},
     onSendText: (Boolean, Boolean) -> Unit = { _, _ -> },
+    documentState: com.androidengineers.agent_quickstart_android.rag.DocumentDemoState = com.androidengineers.agent_quickstart_android.rag.DocumentDemoState(),
+    onOpenDocument: (android.net.Uri) -> Unit = {},
+    onImportModel: (android.net.Uri, Boolean) -> Unit = { _, _ -> },
 ) {
     VoiceAiAppScreen(
         uiState = uiState,
@@ -120,6 +123,9 @@ fun ConversationScreen(
         onDismissMessages = onDismissMessages,
         onTextChanged = onTextChanged,
         onSendText = onSendText,
+        documentState = documentState,
+        onOpenDocument = onOpenDocument,
+        onImportModel = onImportModel,
     )
 }
 
@@ -133,16 +139,32 @@ fun VoiceAiAppScreen(
     onDismissMessages: () -> Unit,
     onTextChanged: (String) -> Unit = {},
     onSendText: (Boolean, Boolean) -> Unit = { _, _ -> },
+    documentState: com.androidengineers.agent_quickstart_android.rag.DocumentDemoState = com.androidengineers.agent_quickstart_android.rag.DocumentDemoState(),
+    onOpenDocument: (android.net.Uri) -> Unit = {},
+    onImportModel: (android.net.Uri, Boolean) -> Unit = { _, _ -> },
 ) {
+    var documentOpenRequest by rememberSaveable { mutableStateOf(0) }
     Scaffold(
         modifier = Modifier.imePadding(),
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets.safeDrawing,
         topBar = {
-            VoiceAiTopBar(
-                isDarkTheme = uiState.isDarkTheme,
-                onToggleTheme = onToggleTheme,
-            )
+            Column {
+                VoiceAiTopBar(
+                    isDarkTheme = uiState.isDarkTheme,
+                    onToggleTheme = onToggleTheme,
+                )
+                com.androidengineers.agent_quickstart_android.rag.DocumentDemo(
+                    state = documentState,
+                    openRequest = documentOpenRequest,
+                    inSession = uiState.inConversation,
+                    starting = uiState.isStarting || uiState.isStopping,
+                    error = uiState.errorMessage ?: uiState.warningMessage,
+                    onOpenDocument = onOpenDocument,
+                    onImportModel = onImportModel,
+                    onStartVoice = onStartRequested,
+                )
+            }
         },
         bottomBar = {
             if (uiState.inConversation) {
@@ -191,7 +213,10 @@ fun VoiceAiAppScreen(
                     } else {
                         PreSessionScreen(
                             uiState = uiState,
-                            onStartRequested = onStartRequested,
+                            onStartRequested = {
+                                if (documentState.loaded) onStartRequested()
+                                else { onDismissMessages(); documentOpenRequest++ }
+                            },
                             onDismissMessages = onDismissMessages,
                         )
                     }
@@ -235,12 +260,12 @@ private fun VoiceAiTopBar(
                 )
             }
             Text(
-                text = "Voice AI for Android",
+                text = "Agora + on-device Gemma",
                 style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.onBackground,
             )
             Text(
-                text = "Build and monitor realtime voice sessions with Agora Conversational AI.",
+                text = "Talk naturally to your documents. Gemma reasons on your phone; Agora brings the voice.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
             )
@@ -262,7 +287,7 @@ private fun PreSessionScreen(
         item {
             HeroIntroCard(
                 title = "Start a voice session",
-                subtitle = "Connect through the Python quickstart server, join the Agora channel, start the cloud agent, and stream live transcript events.",
+                subtitle = "Open a document above, wait for local indexing, then start talking with Agora and Gemma.",
             )
         }
 
@@ -288,18 +313,18 @@ private fun SessionSetupCard(
 ) {
     AgentCard(
         title = "Ready to start",
-        subtitle = "Everything needed for the demo is condensed into one card so the page stays focused.",
+        subtitle = "Import the models once, open your document, and start the conversation.",
     ) {
         LabeledIconText(
             icon = Icons.Outlined.Link,
-            label = "Backend-managed session",
-            value = "The Python server owns Agora credentials, token generation, and agent lifecycle calls. Android receives only short-lived session tokens.",
+            label = "Continuous voice with Agora",
+            value = "Speak, ask follow-up questions, and interrupt naturally. The voice connection needs internet.",
         )
 
         LabeledIconText(
             icon = Icons.Outlined.Link,
-            label = "Default Agora-managed engine",
-            value = "Uses Agora-managed Deepgram ASR, OpenAI LLM, and MiniMax TTS for the voice agent.",
+            label = "Knowledge and reasoning on your phone",
+            value = "EmbeddingGemma searches your document. Gemma generates answers locally; only answer text returns for Agora speech.",
         )
 
         FlowRow(
@@ -319,7 +344,7 @@ private fun SessionSetupCard(
             items = listOf(
                 InfoItemModel(
                     label = "Conversation engine",
-                    value = "Default Agora",
+                    value = "On-device Gemma + Agora voice",
                 ),
                 InfoItemModel(
                     label = "Configuration",

@@ -29,6 +29,13 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+            val documentState by viewModel.documentState.collectAsStateWithLifecycle()
+            androidx.compose.runtime.DisposableEffect(uiState.inConversation, documentState.busy) {
+                if (uiState.inConversation || documentState.busy) {
+                    window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                } else window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                onDispose { window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+            }
             val systemDarkTheme = isSystemInDarkTheme()
 
             LaunchedEffect(systemDarkTheme) {
@@ -75,6 +82,9 @@ class MainActivity : ComponentActivity() {
                     onDismissMessages = viewModel::clearTransientMessages,
                     onTextChanged = viewModel::updateTextDraft,
                     onSendText = viewModel::sendText,
+                    documentState = documentState,
+                    onOpenDocument = viewModel::importDocument,
+                    onImportModel = viewModel::importModel,
                 )
             }
         }

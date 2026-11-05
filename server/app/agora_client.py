@@ -5,7 +5,7 @@ import time
 from typing import Any
 
 import httpx
-from agora_agent import Agent, Area, AsyncAgora, DeepgramSTT, MiniMaxTTS, OpenAI
+from agora_agent import Agent, Area, AsyncAgora, DeepgramSTT, MiniMaxTTS, OpenAI, CustomLLM
 from agora_agent.agentkit import generate_convo_ai_token
 from agora_agent.core.api_error import ApiError
 
@@ -63,7 +63,7 @@ class AgoraClient:
         expires_at = int(time.time()) + self.settings.token_expiry_seconds
         return token, token, expires_at
 
-    def _build_agent(self, system_prompt: str | None = None) -> Agent:
+    def _build_agent(self, system_prompt: str | None = None, document_llm_url: str | None = None, document_token: str | None = None) -> Agent:
         tools = []
         if self.settings.public_base_url:
             tools.append({
@@ -85,6 +85,18 @@ class AgoraClient:
                     "timeout_ms": 5000,
                 },
             })
+        if document_llm_url:
+            tools = []
+        llm = CustomLLM(
+            api_key=document_token, base_url=document_llm_url, model="on-device-gemma",
+            greeting_message="Your document and on-device Gemma are ready. What would you like to know?",
+            failure_message="The phone model is unavailable. Please try again.", max_history=12,
+        ) if document_llm_url else OpenAI(
+            model=self.settings.llm_model,
+            system_messages=[{"role": "system", "content": system_prompt or DEFAULT_SYSTEM_PROMPT}],
+            greeting_message="Hi there!", failure_message="Please wait a moment.",
+            max_history=15, max_tokens=1024, temperature=0.7, top_p=0.95, tools=tools or None,
+        )
         return (
             Agent(
                 client=self._client,
@@ -106,7 +118,7 @@ class AgoraClient:
                 },
                 interruption={"enable": True, "mode": "start_of_speech"},
                 filler_words={
-                    "enable": True,
+                    "enable": not bool(document_llm_url),
                     "trigger": {
                         "mode": "fixed_time",
                         "fixed_time_config": {"response_wait_ms": 1500},
@@ -137,21 +149,7 @@ class AgoraClient:
                 },
             )
             .with_stt(DeepgramSTT(model=self.settings.asr_model, language="en"))
-            .with_llm(
-                OpenAI(
-                    model=self.settings.llm_model,
-                    system_messages=[
-                        {"role": "system", "content": system_prompt or DEFAULT_SYSTEM_PROMPT}
-                    ],
-                    greeting_message="Hi there!",
-                    failure_message="Please wait a moment.",
-                    max_history=15,
-                    max_tokens=1024,
-                    temperature=0.7,
-                    top_p=0.95,
-                    tools=tools or None,
-                )
-            )
+            .with_llm(llm)
             .with_tts(
                 MiniMaxTTS(
                     model=self.settings.tts_model,
@@ -166,8 +164,9 @@ class AgoraClient:
         requester_rtc_uid: int,
         agent_profile: str | None = None,
         system_prompt: str | None = None,
+        document_llm_url: str | None = None, document_token: str | None = None,
     ) -> dict[str, Any]:
-        session = self._build_agent(system_prompt).create_async_session(
+        session = self._build_agent(system_prompt, document_llm_url, document_token).create_async_session(
             channel=channel_name,
             agent_uid=str(self.settings.agent_uid),
             remote_uids=[str(requester_rtc_uid)],

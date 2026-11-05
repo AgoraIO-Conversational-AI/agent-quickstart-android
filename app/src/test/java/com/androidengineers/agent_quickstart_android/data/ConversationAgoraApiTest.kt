@@ -27,6 +27,51 @@ class ConversationAgoraApiTest {
     fun tearDown() = server.shutdown()
 
     @Test
+    fun partialAnswerKeepsWhitespaceAndDoesNotFinishTheTurn() = runBlocking {
+        server.enqueue(MockResponse().setBody("""{"success":true}"""))
+        api.submitDocumentResult("room-doc", "a".repeat(32), "request-1", " The battery ", final = false)
+        val body = JsonParser.parseString(server.takeRequest().body.readUtf8()).asJsonObject
+        assertEquals(" The battery ", body.get("answer").asString)
+        org.junit.Assert.assertFalse(body.get("final").asBoolean)
+    }
+
+    @Test
+    fun rejectsOldBackendBeforeStartingDocumentSession() = runBlocking {
+        server.enqueue(MockResponse().setBody("""{"paths":{"/v1/conversation/join":{}}}"""))
+        val error = runCatching { api.requireOnDeviceBackend() }.exceptionOrNull()
+        org.junit.Assert.assertTrue(error is java.io.IOException)
+        org.junit.Assert.assertTrue(error?.message.orEmpty().contains("outdated"))
+        assertEquals("/openapi.json", server.takeRequest().path)
+    }
+
+    @Test
+    fun acceptsBackendWithGemmaRelay() = runBlocking {
+        server.enqueue(MockResponse().setBody("""{"paths":{"/v1/document/chat/completions":{}},"components":{"schemas":{"DocumentResultRequest":{"properties":{"final":{"type":"boolean"}}}}}}"""))
+        api.requireOnDeviceBackend()
+        assertEquals("/openapi.json", server.takeRequest().path)
+    }
+
+    @Test
+    fun documentSessionAndRetrievalUseMatchingContracts() = runBlocking {
+        server.enqueue(MockResponse().setBody("""{"agent_id":"agent-doc","created_at_unix":1,"status":"started"}"""))
+        api.inviteAgent("room-doc", "42", "a".repeat(32))
+        val joined = JsonParser.parseString(server.takeRequest().body.readUtf8()).asJsonObject
+        assertEquals("a".repeat(32), joined.get("document_token").asString)
+        server.enqueue(MockResponse().setBody("""{"request_id":"request-1","question":"amber indicator"}"""))
+        val question = api.pollDocument("room-doc", "a".repeat(32))
+        assertEquals("request-1", question.requestId)
+        assertEquals("/v1/document/poll", server.takeRequest().path)
+        server.enqueue(MockResponse().setBody("""{"success":true}"""))
+        api.submitDocumentResult("room-doc", "a".repeat(32), "request-1", "Clean the filter")
+        val request = server.takeRequest()
+        assertEquals("/v1/document/result", request.path)
+        val result = JsonParser.parseString(request.body.readUtf8()).asJsonObject
+        assertEquals("request-1", result.get("request_id").asString)
+        assertEquals("Clean the filter", result.get("answer").asString)
+        org.junit.Assert.assertFalse(result.has("sources"))
+    }
+
+    @Test
     fun bootstrapUsesBackendContractWithoutClientAuthorization() = runBlocking {
         server.enqueue(
             MockResponse().setBody(

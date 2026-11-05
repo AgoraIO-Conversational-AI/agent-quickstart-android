@@ -15,6 +15,7 @@ class SessionRecord:
     created_at_unix: int
     agent_id: str | None = None
     agent_state: str = "bootstrapped"
+    document_bridge: object | None = None
 
 
 class SessionStore:
@@ -44,7 +45,9 @@ class SessionStore:
 
     async def remove(self, channel_name: str) -> None:
         async with self._lock:
-            self._sessions.pop(channel_name, None)
+            record = self._sessions.pop(channel_name, None)
+            if record and record.document_bridge:
+                record.document_bridge.close()
             self._join_locks.pop(channel_name, None)
 
     async def count(self) -> int:
@@ -67,5 +70,7 @@ class SessionStore:
             if record.created_at_unix < cutoff
         ]
         for channel in expired:
-            self._sessions.pop(channel, None)
+            record = self._sessions.pop(channel, None)
+            if record and record.document_bridge:
+                record.document_bridge.close()
             self._join_locks.pop(channel, None)

@@ -22,6 +22,7 @@ class BootstrapResponse(BaseModel):
 
 
 class JoinRequest(BaseModel):
+    document_token: str | None = Field(default=None, min_length=32, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
     channel_name: str = Field(min_length=1, max_length=64)
     requester_rtc_uid: int = Field(ge=1, le=2_147_483_647)
     agent_profile: str | None = Field(default=None, max_length=256)
@@ -84,3 +85,22 @@ class ErrorDetail(BaseModel):
     message: str
     request_id: str | None = None
     context: dict[str, Any] | None = None
+
+
+class DocumentPollRequest(BaseModel):
+    channel_name: str = Field(min_length=1, max_length=64)
+    token: str = Field(min_length=32, max_length=128)
+
+
+class DocumentStatusRequest(DocumentPollRequest):
+    request_id: str = Field(min_length=1, max_length=64)
+
+
+class DocumentResultRequest(DocumentStatusRequest):
+    final: bool = True
+    answer: str = Field(min_length=1, max_length=2000)
+
+
+class LocalChatRequest(BaseModel):
+    messages: list[dict[str, Any]] = Field(min_length=1, max_length=64)
+    stream: bool = True

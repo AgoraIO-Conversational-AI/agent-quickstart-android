@@ -100,7 +100,7 @@ class ConversationUiStateMapperTest {
         )
 
         assertEquals(AgentVisualState.WAITING, merged.agentVisualState)
-        assertEquals("Waiting for the cloud agent", merged.agentStateLabel)
+        assertEquals("Waiting for the voice agent", merged.agentStateLabel)
         assertEquals("RTC connecting", merged.rtcConnectionLabel)
     }
 

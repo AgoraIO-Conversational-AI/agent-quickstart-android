@@ -36,6 +36,7 @@ android {
     defaultConfig {
         applicationId = "com.androidengineers.agent_quickstart_android"
         minSdk = 24
+        ndk { abiFilters += "arm64-v8a" }
         targetSdk = 36
         versionCode = 2
         versionName = "1.1.0"
@@ -82,6 +83,9 @@ android {
 }
 
 dependencies {
+    implementation("com.tom-roush:pdfbox-android:2.0.27.0")
+    implementation("com.google.ai.edge.litertlm:litertlm-android:0.14.0")
+    implementation("com.google.mediapipe:tasks-text:1.0.0")
     implementation(libs.agora.rtc)
     implementation(libs.agora.rtm)
     implementation(libs.retrofit)

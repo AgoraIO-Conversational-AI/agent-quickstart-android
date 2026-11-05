@@ -587,7 +587,7 @@ class AgoraConversationSessionManager(
                 addIssue(
                     source = "interrupt",
                     code = turnId?.toString() ?: "user-transcription",
-                    message = error.message ?: "Failed to interrupt the cloud agent.",
+                    message = error.message ?: "Failed to interrupt the voice agent.",
                 )
             }
         }

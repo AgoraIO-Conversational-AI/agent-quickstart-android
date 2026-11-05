@@ -1,0 +1,17 @@
+FIELD KIT — DEMO MANUAL
+This is a fictional product manual for the document voice demo.
+
+AMBER INDICATOR
+The amber indicator means the filter needs cleaning. Switch off the Field Kit before removing the filter. Rinse the filter with cool water and let it dry completely before reinstalling it.
+
+BATTERY AND CHARGING
+The battery provides up to 6 hours of operation. A full charge takes 90 minutes using the supplied charger. A blinking green light means the battery is charging. A solid green light means charging is complete.
+
+RESET PROCEDURE
+To reset the Field Kit, hold the blue button for 8 seconds. Resetting clears saved preferences. It does not clean the filter or recharge the battery.
+
+WATER RESISTANCE
+The Field Kit tolerates light splashes. Do not submerge it in water. Keep the charging port dry before connecting the charger.
+
+STORAGE
+Store the Field Kit in a cool, dry place. Remove and dry the filter before storing the kit for more than 30 days.

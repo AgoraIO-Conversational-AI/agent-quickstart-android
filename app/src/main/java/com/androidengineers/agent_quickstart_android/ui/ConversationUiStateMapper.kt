@@ -75,7 +75,7 @@ internal object ConversationUiStateMapper {
 
     private fun SessionSnapshot.toAgentLabel(): String {
         return when (toVisualState()) {
-            AgentVisualState.WAITING -> "Waiting for the cloud agent"
+            AgentVisualState.WAITING -> "Waiting for the voice agent"
             AgentVisualState.LISTENING -> "Listening for your turn"
             AgentVisualState.THINKING -> "Thinking through a response"
             AgentVisualState.SPEAKING -> "Speaking back in real time · barge-in ready"

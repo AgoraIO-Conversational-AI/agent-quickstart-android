@@ -6,6 +6,7 @@ import com.androidengineers.agent_quickstart_android.model.AgoraTokenBundle
 import com.androidengineers.agent_quickstart_android.model.BackendHealthResult
 import com.androidengineers.agent_quickstart_android.model.RenewalTokens
 import com.google.gson.annotations.SerializedName
+import com.google.gson.JsonObject
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 import okhttp3.OkHttpClient
@@ -36,6 +37,16 @@ class ConversationAgoraApi(
     suspend fun checkHealth(): BackendHealthResult {
         val body = service.health().requireBody()
         return BackendHealthResult(status = body.status, version = body.version)
+    }
+
+    suspend fun requireOnDeviceBackend() {
+        val specification = service.openApi().requireBody()
+        val paths = specification.getAsJsonObject("paths")
+        val resultFields = specification.getAsJsonObject("components")?.getAsJsonObject("schemas")
+            ?.getAsJsonObject("DocumentResultRequest")?.getAsJsonObject("properties")
+        if (paths == null || !paths.has("/v1/document/chat/completions") || resultFields?.has("final") != true) {
+            throw IOException("The Python backend is outdated. Restart it with ./server/run.sh before starting an on-device Gemma session.")
+        }
     }
 
     suspend fun requestSessionBootstrap(): AgoraTokenBundle {
@@ -74,10 +85,12 @@ class ConversationAgoraApi(
     suspend fun inviteAgent(
         channelName: String,
         requesterRtcUid: String,
+        documentToken: String? = null,
     ): AgentInviteResult {
         val body = service.join(
             request = JoinRequest(
                 channelName = channelName,
+                documentToken = documentToken,
                 requesterRtcUid = requesterRtcUid.toIntOrNull()
                     ?: throw IOException("The requester RTC UID must be numeric."),
             ),
@@ -113,6 +126,22 @@ class ConversationAgoraApi(
         if (speak) service.speak(request).requireSuccess() else service.think(request).requireSuccess()
     }
 
+    data class DocumentQuestion(@SerializedName("request_id") val requestId: String?, val question: String?, val history: String? = null, @SerializedName("previous_question") val previousQuestion: String? = null)
+    data class DocumentPoll(val channel_name: String, val token: String)
+    data class DocumentResult(val channel_name: String, val token: String, val request_id: String, val answer: String, val final: Boolean = true)
+
+    suspend fun pollDocument(channel: String, token: String): DocumentQuestion =
+        service.pollDocument(DocumentPoll(channel, token)).requireBody()
+
+    suspend fun submitDocumentResult(channel: String, token: String, requestId: String, answer: String, final: Boolean = true) {
+        service.documentResult(DocumentResult(channel, token, requestId, answer, final)).requireSuccess()
+    }
+
+    data class DocumentStatus(val channel_name: String, val token: String, val request_id: String)
+    data class DocumentStatusResult(val active: Boolean)
+    suspend fun documentRequestActive(channel: String, token: String, id: String): Boolean =
+        service.documentStatus(DocumentStatus(channel, token, id)).requireBody().active
+
     private fun <T> Response<T>.requireBody(): T {
         if (!isSuccessful) throw toIOException()
         return body() ?: throw IOException("The quickstart server returned an empty response.")
@@ -141,6 +170,18 @@ class ConversationAgoraApi(
     }
 
     private interface ConversationBackendService {
+        @GET("openapi.json")
+        suspend fun openApi(): Response<JsonObject>
+
+        @POST("v1/document/request-status")
+        suspend fun documentStatus(@Body request: DocumentStatus): Response<DocumentStatusResult>
+
+        @POST("v1/document/poll")
+        suspend fun pollDocument(@Body request: DocumentPoll): Response<DocumentQuestion>
+
+        @POST("v1/document/result")
+        suspend fun documentResult(@Body request: DocumentResult): Response<ActionResponse>
+
         @POST("v1/conversation/speak")
         suspend fun speak(@Body request: TextActionRequest): Response<ActionResponse>
 
@@ -190,6 +231,7 @@ class ConversationAgoraApi(
     )
 
     private data class JoinRequest(
+        @SerializedName("document_token") val documentToken: String? = null,
         @SerializedName("channel_name") val channelName: String,
         @SerializedName("requester_rtc_uid") val requesterRtcUid: Int,
     )

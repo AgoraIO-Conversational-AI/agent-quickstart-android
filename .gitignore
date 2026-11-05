@@ -23,3 +23,7 @@ local.properties
 /server/.pytest_cache
 /server/app/__pycache__
 /server/tests/__pycache__
+
+# Download model weights separately; never commit them with demo source.
+*.litertlm
+*.task

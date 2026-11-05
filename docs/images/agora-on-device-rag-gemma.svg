@@ -1,0 +1,196 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1200" viewBox="0 0 1800 1200" role="img" aria-labelledby="title desc">
+<title id="title">Agora + on-device RAG + Gemma: complete architecture</title>
+<desc id="desc">Audio goes from Android to Agora ASR. A Python relay sends question text and bounded history to Android. EmbeddingGemma, hybrid retrieval and Gemma generation run on the phone. Partial answer text returns through Python SSE to Agora TTS, and audio returns to the user. Document text, embeddings and retrieved passages stay on the phone.</desc>
+<defs>
+ <pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="0.8" fill="#d4d4d0" opacity=".52"/></pattern>
+ <filter id="sketch" x="-3%" y="-3%" width="106%" height="106%"><feTurbulence type="fractalNoise" baseFrequency=".022" numOctaves="2" seed="8" result="noise"/><feDisplacementMap in="SourceGraphic" in2="noise" scale="1.25" xChannelSelector="R" yChannelSelector="G"/></filter>
+ <marker id="arrow-green" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M1 1 L10 6 L1 11" fill="none" stroke="#347454" stroke-width="2"/></marker>
+ <marker id="arrow-blue" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M1 1 L10 6 L1 11" fill="none" stroke="#2675b9" stroke-width="2"/></marker>
+ <marker id="arrow-purple" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M1 1 L10 6 L1 11" fill="none" stroke="#8054a4" stroke-width="2"/></marker>
+</defs>
+<rect width="1800" height="1200" fill="#fffdf8"/><rect width="1800" height="1200" fill="url(#dots)"/>
+<style>text{fill:#273444;font-family:'Comic Sans MS','Segoe Print',cursive} .body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif} .small{font-size:20px} .label{font-size:23px;font-weight:600} .muted{fill:#596574}</style>
+<text x="900" y="70" text-anchor="middle" font-size="46" font-weight="bold" style="fill:#273444">
+<tspan x="900" dy="0">Agora + on-device RAG + Gemma</tspan>
+</text>
+<text x="900" y="115" text-anchor="middle" font-size="24" font-weight="normal" class="body" style="fill:#596574">
+<tspan x="900" dy="0">Your documents and reasoning stay on Android. Agora brings the conversation to life.</tspan>
+</text>
+<rect x="40" y="220" width="830" height="780" rx="25" fill="#f3faf3" stroke="#80a88a" stroke-width="2.6" stroke-dasharray="10 7" filter="url(#sketch)"/>
+<rect x="930" y="440" width="350" height="560" rx="25" fill="#fff8eb" stroke="#d7a454" stroke-width="2.6" stroke-dasharray="10 7" filter="url(#sketch)"/>
+<rect x="1320" y="220" width="440" height="780" rx="25" fill="#f0f7ff" stroke="#78a5d1" stroke-width="2.6" stroke-dasharray="10 7" filter="url(#sketch)"/>
+<text x="70" y="252" text-anchor="start" font-size="24" font-weight="bold" style="fill:#347454">
+<tspan x="70" dy="0">ANDROID PHONE</tspan>
+</text>
+<text x="955" y="469" text-anchor="start" font-size="21" font-weight="bold" style="fill:#98611b">
+<tspan x="955" dy="0">YOUR PYTHON BACKEND</tspan>
+</text>
+<text x="1348" y="252" text-anchor="start" font-size="21" font-weight="bold" style="fill:#2675b9">
+<tspan x="1348" dy="0">AGORA + VOICE PROVIDERS</tspan>
+</text>
+<rect x="80" y="285" width="740" height="100" rx="20" fill="#faf5ff" stroke="#8054a4" stroke-width="2.6" filter="url(#sketch)"/>
+<rect x="82" y="284" width="737" height="102" rx="20" fill="none" stroke="#8054a4" stroke-width=".8" opacity=".22" filter="url(#sketch)"/>
+<text x="450" y="325" text-anchor="middle" font-size="28" font-weight="bold" style="fill:#273444">
+<tspan x="450" dy="0">Speak + listen in the Android app</tspan>
+</text>
+<text x="450" y="359" text-anchor="middle" font-size="21" font-weight="normal" class="body" style="fill:#273444">
+<tspan x="450" dy="0">Microphone • transcripts • follow-ups • interruption</tspan>
+</text>
+<circle cx="105" cy="306" r="20" fill="#fffdf8" stroke="#374151" stroke-width="2" filter="url(#sketch)"/>
+<text x="105" y="313" text-anchor="middle" font-size="21" font-weight="bold" style="fill:#273444">
+<tspan x="105" dy="0">1</tspan>
+</text>
+<path d="M820 330 L1360 330" fill="none" stroke="#8054a4" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-purple)"/>
+<text x="1090" y="305" text-anchor="middle" font-size="21" font-weight="normal" class="body" style="fill:#8054a4">
+<tspan x="1090" dy="0">Live microphone audio · RTC</tspan>
+</text>
+<rect x="1360" y="285" width="360" height="100" rx="20" fill="#e3f0ff" stroke="#2675b9" stroke-width="2.6" filter="url(#sketch)"/>
+<rect x="1362" y="284" width="357" height="102" rx="20" fill="none" stroke="#2675b9" stroke-width=".8" opacity=".22" filter="url(#sketch)"/>
+<text x="1540" y="326" text-anchor="middle" font-size="29" font-weight="bold" style="fill:#273444">
+<tspan x="1540" dy="0">Agora ASR</tspan>
+</text>
+<text x="1540" y="359" text-anchor="middle" font-size="21" font-weight="normal" class="body" style="fill:#273444">
+<tspan x="1540" dy="0">Speech → question text</tspan>
+</text>
+<path d="M1540 385 L1540 490" fill="none" stroke="#2675b9" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-blue)"/>
+<text x="1555" y="438" text-anchor="start" font-size="20" font-weight="normal" class="body" style="fill:#2675b9">
+<tspan x="1555" dy="0">transcript</tspan>
+</text>
+<rect x="1360" y="490" width="360" height="130" rx="20" fill="#e3f0ff" stroke="#2675b9" stroke-width="2.6" filter="url(#sketch)"/>
+<rect x="1362" y="489" width="357" height="132" rx="20" fill="none" stroke="#2675b9" stroke-width=".8" opacity=".22" filter="url(#sketch)"/>
+<text x="1540" y="532" text-anchor="middle" font-size="25" font-weight="normal" style="fill:#273444">
+<tspan x="1540" dy="0">CustomLLM connector</tspan>
+<tspan x="1540" dy="34">Calls your model endpoint</tspan>
+</text>
+<text x="1540" y="600" text-anchor="middle" font-size="20" font-weight="normal" class="body" style="fill:#2675b9">
+<tspan x="1540" dy="0">No cloud LLM reasoning</tspan>
+</text>
+<rect x="960" y="505" width="280" height="140" rx="20" fill="#fff0d7" stroke="#b47b2f" stroke-width="2.6" filter="url(#sketch)"/>
+<rect x="962" y="504" width="277" height="142" rx="20" fill="none" stroke="#b47b2f" stroke-width=".8" opacity=".22" filter="url(#sketch)"/>
+<text x="1100" y="545" text-anchor="middle" font-size="22" font-weight="normal" style="fill:#273444">
+<tspan x="1100" dy="0">Question + recent history</tspan>
+<tspan x="1100" dy="34">HTTPS / long polling</tspan>
+</text>
+<text x="1100" y="618" text-anchor="middle" font-size="18" font-weight="normal" class="body" style="fill:#273444">
+<tspan x="1100" dy="0">Session token + request ID</tspan>
+</text>
+<path d="M1360 555 L1240 555" fill="none" stroke="#2675b9" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-blue)"/>
+<circle cx="1298" cy="526" r="20" fill="#fffdf8" stroke="#374151" stroke-width="2" filter="url(#sketch)"/>
+<text x="1298" y="533" text-anchor="middle" font-size="21" font-weight="bold" style="fill:#273444">
+<tspan x="1298" dy="0">2</tspan>
+</text>
+<rect x="70" y="420" width="770" height="375" rx="18" fill="#ffffff" stroke="#b4c8b5" stroke-width="2.6" stroke-dasharray="10 7" filter="url(#sketch)"/>
+<text x="95" y="451" text-anchor="start" font-size="21" font-weight="bold" style="fill:#347454">
+<tspan x="95" dy="0">LOCAL DOCUMENT KNOWLEDGE</tspan>
+</text>
+<rect x="95" y="480" width="165" height="90" rx="20" fill="#edf7eb" stroke="#347454" stroke-width="2.6" filter="url(#sketch)"/>
+<rect x="97" y="479" width="162" height="92" rx="20" fill="none" stroke="#347454" stroke-width=".8" opacity=".22" filter="url(#sketch)"/>
+<text x="177" y="516" text-anchor="middle" font-size="20" font-weight="normal" style="fill:#273444">
+<tspan x="177" dy="0">PDF / TXT / MD</tspan>
+<tspan x="177" dy="29">Open document</tspan>
+</text>
+<rect x="300" y="480" width="180" height="90" rx="20" fill="#edf7eb" stroke="#347454" stroke-width="2.6" filter="url(#sketch)"/>
+<rect x="302" y="479" width="177" height="92" rx="20" fill="none" stroke="#347454" stroke-width=".8" opacity=".22" filter="url(#sketch)"/>
+<text x="390" y="516" text-anchor="middle" font-size="21" font-weight="normal" style="fill:#273444">
+<tspan x="390" dy="0">Extract text</tspan>
+<tspan x="390" dy="29">Overlap chunks</tspan>
+</text>
+<rect x="520" y="480" width="285" height="90" rx="20" fill="#edf7eb" stroke="#347454" stroke-width="2.6" filter="url(#sketch)"/>
+<rect x="522" y="479" width="282" height="92" rx="20" fill="none" stroke="#347454" stroke-width=".8" opacity=".22" filter="url(#sketch)"/>
+<text x="662" y="516" text-anchor="middle" font-size="22" font-weight="normal" style="fill:#273444">
+<tspan x="662" dy="0">EmbeddingGemma</tspan>
+<tspan x="662" dy="29">Document embeddings</tspan>
+</text>
+<path d="M260 525 L300 525" fill="none" stroke="#347454" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-green)"/>
+<path d="M480 525 L520 525" fill="none" stroke="#347454" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-green)"/>
+<path d="M662 570 L662 650" fill="none" stroke="#347454" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-green)"/>
+<path d="M960 585 L895 585 L895 610 L245 610 L245 650" fill="none" stroke="#2675b9" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-blue)"/>
+<text x="425" y="600" text-anchor="middle" font-size="19" font-weight="normal" class="body" style="fill:#2675b9">
+<tspan x="425" dy="0">Question + bounded history → phone</tspan>
+</text>
+<rect x="95" y="650" width="300" height="105" rx="20" fill="#edf7eb" stroke="#347454" stroke-width="2.6" filter="url(#sketch)"/>
+<rect x="97" y="649" width="297" height="107" rx="20" fill="none" stroke="#347454" stroke-width=".8" opacity=".22" filter="url(#sketch)"/>
+<text x="245" y="688" text-anchor="middle" font-size="23" font-weight="normal" style="fill:#273444">
+<tspan x="245" dy="0">EmbeddingGemma</tspan>
+<tspan x="245" dy="32">Query embedding</tspan>
+</text>
+<circle cx="115" cy="668" r="20" fill="#fffdf8" stroke="#374151" stroke-width="2" filter="url(#sketch)"/>
+<text x="115" y="675" text-anchor="middle" font-size="21" font-weight="bold" style="fill:#273444">
+<tspan x="115" dy="0">3</tspan>
+</text>
+<rect x="520" y="650" width="285" height="105" rx="20" fill="#edf7eb" stroke="#347454" stroke-width="2.6" filter="url(#sketch)"/>
+<rect x="522" y="649" width="282" height="107" rx="20" fill="none" stroke="#347454" stroke-width=".8" opacity=".22" filter="url(#sketch)"/>
+<text x="662" y="682" text-anchor="middle" font-size="21" font-weight="normal" style="fill:#273444">
+<tspan x="662" dy="0">Local hybrid retrieval</tspan>
+<tspan x="662" dy="28">Vector index + BM25</tspan>
+<tspan x="662" dy="28">Cosine + rank fusion</tspan>
+</text>
+<path d="M395 703 L520 703" fill="none" stroke="#347454" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-green)"/>
+<text x="456" y="687" text-anchor="middle" font-size="17" font-weight="normal" class="body" style="fill:#347454">
+<tspan x="456" dy="0">vector</tspan>
+</text>
+<path d="M662 755 L662 850" fill="none" stroke="#347454" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-green)"/>
+<text x="681" y="815" text-anchor="start" font-size="19" font-weight="normal" class="body" style="fill:#347454">
+<tspan x="681" dy="0">Top 2 evidence</tspan>
+<tspan x="681" dy="26">passages</tspan>
+</text>
+<rect x="350" y="850" width="470" height="110" rx="20" fill="#e2f1e2" stroke="#347454" stroke-width="2.6" filter="url(#sketch)"/>
+<rect x="352" y="849" width="467" height="112" rx="20" fill="none" stroke="#347454" stroke-width=".8" opacity=".22" filter="url(#sketch)"/>
+<text x="585" y="889" text-anchor="middle" font-size="27" font-weight="bold" style="fill:#273444">
+<tspan x="585" dy="0">Gemma 4 E2B · LiteRT LM</tspan>
+</text>
+<text x="585" y="925" text-anchor="middle" font-size="21" font-weight="normal" class="body" style="fill:#273444">
+<tspan x="585" dy="0">Evidence + history → grounded answer</tspan>
+</text>
+<circle cx="372" cy="870" r="20" fill="#fffdf8" stroke="#374151" stroke-width="2" filter="url(#sketch)"/>
+<text x="372" y="877" text-anchor="middle" font-size="21" font-weight="bold" style="fill:#273444">
+<tspan x="372" dy="0">4</tspan>
+</text>
+<text x="1105" y="703" text-anchor="middle" font-size="21" font-weight="normal" style="fill:#98611b">
+<tspan x="1105" dy="0">Transport only.</tspan>
+<tspan x="1105" dy="31">No embeddings. No reasoning.</tspan>
+</text>
+<rect x="960" y="840" width="280" height="120" rx="20" fill="#fff0d7" stroke="#b47b2f" stroke-width="2.6" filter="url(#sketch)"/>
+<rect x="962" y="839" width="277" height="122" rx="20" fill="none" stroke="#b47b2f" stroke-width=".8" opacity=".22" filter="url(#sketch)"/>
+<text x="1100" y="879" text-anchor="middle" font-size="22" font-weight="normal" style="fill:#273444">
+<tspan x="1100" dy="0">Partial answer relay</tspan>
+<tspan x="1100" dy="33">OpenAI-compatible SSE</tspan>
+</text>
+<text x="1100" y="944" text-anchor="middle" font-size="17" font-weight="normal" class="body" style="fill:#273444">
+<tspan x="1100" dy="0">Streams new text as it arrives</tspan>
+</text>
+<path d="M820 905 L960 905" fill="none" stroke="#2675b9" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-blue)"/>
+<text x="890" y="882" text-anchor="middle" font-size="18" font-weight="normal" class="body" style="fill:#2675b9">
+<tspan x="890" dy="0">text</tspan>
+</text>
+<path d="M1240 905 L1360 905" fill="none" stroke="#2675b9" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-blue)"/>
+<circle cx="1298" cy="875" r="20" fill="#fffdf8" stroke="#374151" stroke-width="2" filter="url(#sketch)"/>
+<text x="1298" y="882" text-anchor="middle" font-size="21" font-weight="bold" style="fill:#273444">
+<tspan x="1298" dy="0">5</tspan>
+</text>
+<rect x="1360" y="840" width="360" height="120" rx="20" fill="#e3f0ff" stroke="#2675b9" stroke-width="2.6" filter="url(#sketch)"/>
+<rect x="1362" y="839" width="357" height="122" rx="20" fill="none" stroke="#2675b9" stroke-width=".8" opacity=".22" filter="url(#sketch)"/>
+<text x="1540" y="885" text-anchor="middle" font-size="29" font-weight="bold" style="fill:#273444">
+<tspan x="1540" dy="0">Agora TTS</tspan>
+</text>
+<text x="1540" y="925" text-anchor="middle" font-size="22" font-weight="normal" class="body" style="fill:#273444">
+<tspan x="1540" dy="0">Answer text → speech</tspan>
+</text>
+<path d="M1720 920 L1780 920 L1780 1050 L65 1050 L65 365 L80 365" fill="none" stroke="#8054a4" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-purple)"/>
+<text x="920" y="1037" text-anchor="middle" font-size="23" font-weight="normal" class="body" style="fill:#8054a4">
+<tspan x="920" dy="0">Spoken answer returns through Agora RTC · keep talking in the same session</tspan>
+</text>
+<text x="70" y="1105" text-anchor="start" font-size="20" font-weight="bold" style="fill:#347454">
+<tspan x="70" dy="0">STAYS ON THE PHONE</tspan>
+</text>
+<text x="70" y="1138" text-anchor="start" font-size="21" font-weight="normal" class="body" style="fill:#273444">
+<tspan x="70" dy="0">PDF • passages • vectors • retrieved evidence • Gemma inference</tspan>
+</text>
+<text x="1040" y="1105" text-anchor="start" font-size="20" font-weight="bold" style="fill:#2675b9">
+<tspan x="1040" dy="0">CROSSES THE NETWORK</tspan>
+</text>
+<text x="1040" y="1138" text-anchor="start" font-size="20" font-weight="normal" class="body" style="fill:#273444">
+<tspan x="1040" dy="0">Audio • question/history • generated answer text</tspan>
+<tspan x="1040" dy="29">Voice needs internet; local models do not.</tspan>
+</text>
+</svg>
